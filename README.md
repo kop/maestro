@@ -32,6 +32,7 @@ Haiku triage runs via the Agent tool's per-dispatch model override — no agent 
 ## Skills
 
 - `/review [quick|full] [aspects] [target]` — code review in two modes: **quick** (code-reviewer only, no peer) for a tight loop, **full** (all reviewers + peer cross-check) as the end-to-end gate. Human/maestro invocation defaults to full.
+- `/autopilot [full|batch] <goal>` — run a session unattended to completion on best judgment. **full** (default): never ask, decide-and-log under uncertainty. **batch**: one upfront round of clarifying questions after initial research, then silent to completion. Guardrails are local-only (edit/test/commit on a branch; never push, PR, or touch `main`); every uncertain decision is appended to a ledger at `docs/autopilot/<date>-<goal-slug>-ledger.md`. Assumes an auto-approving permission layer; never manages permissions itself.
 
 ## Dependencies
 
