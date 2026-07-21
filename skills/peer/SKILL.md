@@ -54,6 +54,7 @@ DIFF=$(git diff main...HEAD)
 ```
 
 2. Pipe it into the prompt and run (use the codex-tuned or a flagship model):
+Redact secret values from the diff and findings first — keep file:line and the secret's type, never the value; a review must not ship credentials to an outside vendor.
 
 ```bash
 agent -p --output-format json --mode ask --model gpt-5.6-sol-xhigh "Review this diff. Findings in priority order:

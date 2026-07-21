@@ -4,9 +4,10 @@ Personal Claude Code plugin: model-tiered agents and orchestration skills, adapt
 
 ## Install
 
+    git clone git@github.com:kop/claude-code.git ~/code/kop/claude-code
     claude plugin marketplace add ~/code/kop/claude-code
     claude plugin install kop-kit@kop
-    ln -s ~/code/kop/claude-code/agents/general-purpose.md ~/.claude/agents/general-purpose.md
+    mkdir -p ~/.claude/agents && ln -sf ~/code/kop/claude-code/agents/general-purpose.md ~/.claude/agents/general-purpose.md
 
 Remove any pre-existing `~/.claude/skills/peer` — the plugin ships `/peer`.
 
