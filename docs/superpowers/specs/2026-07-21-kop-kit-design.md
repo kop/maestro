@@ -27,6 +27,7 @@ agents/
   test-analyzer.md       # sonnet
   comment-analyzer.md    # sonnet
   peer.md                # haiku
+  scribe.md              # haiku
   maestro.md             # opus
 skills/
   review/SKILL.md
@@ -40,7 +41,7 @@ Three tiers plus outside escalation:
 
 | Tier | Used for | Mechanism |
 |---|---|---|
-| haiku | Triage, summaries, eligibility checks, confidence scoring | No standing agent — skills dispatch built-in `Explore`/`general-purpose` with the Agent tool's per-call `model: haiku` override |
+| haiku | Triage, summaries, eligibility checks; one dictated file edit | `scribe` for dictated edits; triage via built-in `Explore`/`general-purpose` with the Agent tool's per-call `model: haiku` override |
 | sonnet | Implementation, test/comment analysis, simplification | `general-purpose`, `test-analyzer`, `comment-analyzer` |
 | opus | Judgment: architecture blueprints, review verdicts; session orchestration | `code-architect`, `code-reviewer`, `maestro` |
 | fable | Security audit | `security-reviewer` |
@@ -85,6 +86,10 @@ From `pr-review-toolkit`. Behavioral test-coverage review: untested error paths,
 ### comment-analyzer (sonnet, read-only)
 
 From `pr-review-toolkit`. Verifies every comment claim against actual code and flags comments that restate code or will go stale. Its rubric embeds the comment-discipline policy from the user's global CLAUDE.md verbatim as review rules: default is no comment; comments only for non-obvious intent/trade-offs/constraints, matching file density, fewest words; no restating code, no cross-file references, no change-narrating prose. Embedding (rather than relying on CLAUDE.md inheritance) makes the agent portable and its rubric explicit.
+
+### scribe (haiku, Read + Edit + Write)
+
+A mechanical hand for one dictated file edit — the write a write-free orchestrator delegates. Given an exact path and the exact content or change, it applies it verbatim (reading before editing) and reports the result, or the exact reason it could not; it brings no initiative and does nothing requiring judgment. Primary caller is maestro: subagent-driven-development's controller composes the post-review ledger line for `.superpowers/sdd/progress.md` but cannot write it, so it hands the line to scribe. Gives the haiku tier a standing agent.
 
 ### maestro (opus, read-only orchestrator)
 

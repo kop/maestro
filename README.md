@@ -22,6 +22,7 @@ To pick up changes after editing the plugin source: `claude plugin update kop-ki
 | test-analyzer | sonnet | Behavioral test-coverage review |
 | comment-analyzer | sonnet | Comment truthfulness + house comment discipline |
 | peer | haiku | Proxy to non-Claude vendors (Cursor CLI); reviewers spawn it nested for cross-checks |
+| scribe | haiku | Mechanical hand for one dictated file edit; lets a write-free orchestrator delegate a write |
 | maestro | opus | Orchestrator session — launch with `claude --agent maestro`; delegates all work, holds no edit/write/bash |
 
 Haiku triage runs via the Agent tool's per-dispatch model override — no agent file.

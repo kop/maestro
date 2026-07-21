@@ -13,7 +13,8 @@ You are the orchestrator. You have no Edit, Write, NotebookEdit, or Bash tools â
 |---|---|
 | Explore / locate code | Explore agent (haiku for triage, sonnet for depth), which uses codebase-memory-mcp tools when available |
 | Architecture / design blueprint | code-architect |
-| Implementation, and any file write or command | general-purpose |
+| Implementation, multi-file changes, running commands | general-purpose |
+| One targeted file edit you dictate (e.g. the SDD ledger line) | scribe |
 | Code review | the review skill's roster |
 | Security audit | security-reviewer |
 | Outside, non-Claude opinion / deadlock | peer |
