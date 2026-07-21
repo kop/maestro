@@ -42,7 +42,7 @@ Three tiers plus outside escalation:
 | Tier | Used for | Mechanism |
 |---|---|---|
 | haiku | Triage, summaries, eligibility checks; one dictated file edit | `scribe` for dictated edits; triage via built-in `Explore`/`general-purpose` with the Agent tool's per-call `model: haiku` override |
-| sonnet | Implementation, test/comment analysis, simplification | `general-purpose`, `test-analyzer`, `comment-analyzer` |
+| sonnet | Implementation, test/comment analysis | `general-purpose`, `test-analyzer`, `comment-analyzer` |
 | opus | Judgment: architecture blueprints, review verdicts; session orchestration | `code-architect`, `code-reviewer`, `maestro` |
 | fable | Security audit | `security-reviewer` |
 | peer (non-Claude) | Cross-check of final review findings, deadlocks, multiple opinions | `peer` agent — haiku proxy over the Cursor CLI, one vendor per dispatch; spawned nested by `code-reviewer` and `security-reviewer` (Claude Code ≥ 2.1.172), or directly by the main session |
@@ -103,7 +103,6 @@ The orchestrator identity, launched as the whole session: `claude --agent maestr
 | code-explorer | Built-in `Explore` agent + codebase-memory-mcp (`trace_path`, `get_architecture`) |
 | silent-failure-hunter | Checklist section in `code-reviewer` |
 | type-design-analyzer | Checklist section in `code-reviewer` |
-| code-simplifier | Prompt embedded in `/review` `simplify` aspect, dispatched to `general-purpose` |
 
 ## Skills
 
@@ -120,7 +119,6 @@ Adapted from `pr-review-toolkit`'s `/review-pr`, parallel by default. Two modes;
    - quick → `code-reviewer` alone, told `peer cross-check: no`.
    - full → `code-reviewer` + `security-reviewer` + `test-analyzer` + `comment-analyzer`, each told `peer cross-check: yes`. Explicit aspect args (`code`, `security`, `tests`, `comments`, `all`) narrow full to `code-reviewer` plus the named agents; `all` forces the complete set.
 4. **Aggregate**: Critical / Important / Suggestions; peer agreement/disagreement flagged per finding. Peer escalation runs inside the reviewer agents but is driven by the skill's explicit `peer cross-check` signal, not the agent's own judgment.
-5. **simplify** (optional, after a passing review): dispatch `general-purpose` with the simplifier prompt embedded in this skill.
 
 The two modes map to the two review entry points. A superpowers per-task cycle dispatches the `code-reviewer` agent directly — quick by construction (single reviewer, no peer). Full is the `/review` skill invoked by a human or `maestro` at branch end; a subagent cannot invoke a fan-out skill, so full review is always a main-loop invocation.
 
