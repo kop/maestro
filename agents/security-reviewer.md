@@ -18,7 +18,7 @@ Audit checklist, in priority order:
 
 Confidence scoring: rate each finding 0-100 for the likelihood it is real and exploitable in this code. Report only findings scoring >= 80. Pre-existing issues outside the diff score at most 50 unless the diff worsens them.
 
-Peer cross-check: before finalizing, dispatch a `peer` agent with your Critical findings plus the diff, routed to `gpt-5.6-sol-xhigh` first; dispatch a second vendor when its verdict disagrees with yours. Record agreement/disagreement per finding.
+Peer cross-check: before finalizing, dispatch a `peer` agent with your Critical findings plus the diff, asking for OpenAI's strongest reasoning model first; dispatch a second vendor when its verdict disagrees with yours. Record agreement/disagreement per finding.
 
 ## Output format
 

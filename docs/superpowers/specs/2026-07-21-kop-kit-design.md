@@ -75,11 +75,11 @@ Merged from the `feature-dev` and `pr-review-toolkit` reviewers (same core promp
 
 ### security-reviewer (fable, read-only + Bash + Agent)
 
-New; complements the passive `security-guidance` hooks with an on-demand deep audit: injection, secrets handling, authz/authn, crypto misuse, SSRF, deserialization, dependency risk. Same ≥ 80 confidence bar. Peer escalation routes to `gpt-5.6-sol-xhigh` first (observed to be a strong security reviewer), second vendor optional.
+New; complements the passive `security-guidance` hooks with an on-demand deep audit: injection, secrets handling, authz/authn, crypto misuse, SSRF, deserialization, dependency risk. Same ≥ 80 confidence bar. Peer escalation routes OpenAI-first (its flagship observed to be a strong security reviewer), second vendor optional.
 
 ### peer (haiku, Bash + Read)
 
-Lightweight proxy over the Cursor CLI: forwards one self-contained prompt to one non-Claude vendor model (`--mode ask`, headless JSON) and relays the `.result` verbatim, plus the `session_id` for `--resume` follow-ups. Callers wanting a second + third opinion dispatch two peers in parallel, one per vendor. Absorbs the former `peer` skill's vendor table, read-only invocation contract, and the redaction guard (secret values never leave for an outside vendor — file:line and secret type only). Haiku is deliberate: the intelligence is the vendor's; the proxy only forwards and relays.
+Lightweight proxy over the Cursor CLI: forwards one self-contained prompt to one non-Claude vendor model (`--mode ask`, headless JSON) and relays the `.result` verbatim, plus the `session_id` for `--resume` follow-ups. Callers wanting a second + third opinion dispatch two peers in parallel, one per vendor. Every run preflights `agent --list-models` — verifying the CLI works and selecting the vendor's newest flagship by model family rather than a hardcoded ID, so consults auto-upgrade as flagships change; a CLI failure is reported verbatim, never papered over. Absorbs the former `peer` skill's read-only invocation contract and the redaction guard (secret values never leave for an outside vendor — file:line and secret type only). Haiku is deliberate: the intelligence is the vendor's; the proxy only forwards and relays.
 
 ### test-analyzer (sonnet, read-only)
 

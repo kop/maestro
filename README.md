@@ -18,7 +18,7 @@ To pick up changes after editing the plugin source: `claude plugin update kop-ki
 | general-purpose | sonnet | Implementer; overrides the built-in so subagents stay on sonnet |
 | code-architect | opus | Architecture blueprints |
 | code-reviewer | opus | Review verdicts (≥80 confidence), silent-failure + type lenses, peer cross-check |
-| security-reviewer | fable | Deep security audit, peer cross-check via gpt-5.6-sol |
+| security-reviewer | fable | Deep security audit, peer cross-check (OpenAI-first) |
 | test-analyzer | sonnet | Behavioral test-coverage review |
 | comment-analyzer | sonnet | Comment truthfulness + house comment discipline |
 | peer | haiku | Proxy to non-Claude vendors (Cursor CLI); reviewers spawn it nested for cross-checks |
