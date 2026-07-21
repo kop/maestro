@@ -19,6 +19,8 @@ Skip when the diff touches 3 or fewer files. Otherwise dispatch one Explore agen
 
 ## 3. Dispatch — parallel, in a single message
 
+A requested aspect forces its agent (`code` → code-reviewer, `security` → security-reviewer, `tests` → test-analyzer, `comments` → comment-analyzer); `all` dispatches all four. Without explicit aspects, auto-detect:
+
 - code-reviewer: always.
 - security-reviewer: aspect `security` requested, or the diff touches auth/session code, input parsing, crypto, network fetch, or dependency manifests.
 - test-analyzer: test files changed, or code changed with no test changes.
@@ -28,7 +30,7 @@ Each dispatch gets: the diff (or base/head SHAs and how to reproduce it), the tr
 
 ## 4. Aggregate
 
-Merge findings into Critical / Important / Suggestions. Keep per finding: file:line, source agent, confidence, peer flag where present. Dedupe overlaps, keeping the higher-severity phrasing. End with a recommended fix order.
+Merge findings into Critical / Important / Suggestions. Keep per finding: file:line, source agent, the agent's own score (confidence or criticality) where reported, peer flag where present. Dedupe overlaps, keeping the higher-severity phrasing. End with a recommended fix order.
 
 ## 5. simplify (only when requested, only after a review with no Critical findings)
 
