@@ -29,7 +29,7 @@ Each dispatch gets: the diff (or base/head SHAs and how to reproduce it), the tr
 
 ## 4. Aggregate
 
-Merge findings into Critical / Important / Suggestions. Keep per finding: file:line, source agent, the agent's own score (confidence or criticality) where reported, peer flag where present. Dedupe overlaps, keeping the higher-severity phrasing. End with a recommended fix order.
+Merge findings into Critical / Important / Suggestions. Keep per finding: file:line, source agent, the agent's own score (confidence or criticality) where reported, peer flag where present. Dedupe only when two agents report the same underlying issue; co-located findings about different concerns (e.g. a security defect and a missing-test-coverage gap on the same lines) stay separate line items. A test-analyzer finding that a new or changed function has no test coverage is always kept as its own item, never folded into another agent's finding on those lines. End with a recommended fix order.
 
 ## 5. simplify (only when requested, only after a review with no Critical findings)
 
