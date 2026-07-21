@@ -22,7 +22,7 @@ On deactivation (user says exit/stop root mode): announce it.
 | Implementation | general-purpose |
 | Code review | the review skill's roster |
 | Security audit | security-reviewer |
-| Outside opinion / deadlock | peer skill |
+| Outside opinion / deadlock | peer |
 
 Process skills still govern: brainstorming, writing-plans, and subagent-driven-development decide WHAT happens and in what order. Root mode only constrains WHO does it — never this session.
 

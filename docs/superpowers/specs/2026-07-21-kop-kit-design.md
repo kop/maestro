@@ -4,7 +4,7 @@ Design spec, 2026-07-21.
 
 ## Goal
 
-A single personal Claude Code plugin providing specialized subagents (each with a pinned model and minimal tools) and orchestration skills, adapted from the official `code-review`, `feature-dev`, `pr-review-toolkit`, and `security-guidance` plugins. Agents must work both standalone (dispatched directly or via `/review`) and as workers inside superpowers workflows (`brainstorming`, `writing-plans`, `subagent-driven-development`, `requesting-code-review`). Outside opinions flow through the existing `peer` skill (Cursor CLI: GPT / Gemini / Grok).
+A single personal Claude Code plugin providing specialized subagents (each with a pinned model and minimal tools) and orchestration skills, adapted from the official `code-review`, `feature-dev`, `pr-review-toolkit`, and `security-guidance` plugins. Agents must work both standalone (dispatched directly or via `/review`) and as workers inside superpowers workflows (`brainstorming`, `writing-plans`, `subagent-driven-development`, `requesting-code-review`). Outside opinions flow through the `peer` agent, a haiku proxy over the Cursor CLI (GPT / Gemini / Grok).
 
 Non-goals:
 - No port of the `/feature-dev` 7-phase command — superpowers owns the feature pipeline.
@@ -26,10 +26,10 @@ agents/
   security-reviewer.md   # fable
   test-analyzer.md       # sonnet
   comment-analyzer.md    # sonnet
+  peer.md                # haiku
 skills/
   root/SKILL.md
   review/SKILL.md
-  peer/SKILL.md
 hooks/
   hooks.json             # /root enforcement (PreToolUse)
   root-guard.sh
@@ -47,11 +47,11 @@ Three tiers plus outside escalation:
 | sonnet | Implementation, test/comment analysis, simplification | `general-purpose`, `test-analyzer`, `comment-analyzer` |
 | opus | Judgment: architecture blueprints, review verdicts | `code-architect`, `code-reviewer` |
 | fable | Security audit | `security-reviewer` |
-| peer (non-Claude) | Cross-check of final review findings, deadlocks, multiple opinions | `peer` skill via Cursor CLI; invoked by `code-reviewer` and `security-reviewer` themselves |
+| peer (non-Claude) | Cross-check of final review findings, deadlocks, multiple opinions | `peer` agent — haiku proxy over the Cursor CLI, one vendor per dispatch; spawned nested by `code-reviewer` and `security-reviewer` (Claude Code ≥ 2.1.172), or directly by the main session |
 
 ## Agents
 
-All agents except `general-purpose` are read-only: `Glob, Grep, Read` plus the minimum extras named below. Reviewer roles additionally get `Bash` and `Skill` so they can invoke `peer`.
+All agents except `general-purpose` are read-only: `Glob, Grep, Read` plus the minimum extras named below. Reviewer roles additionally get `Bash` and `Agent` so they can spawn `peer` as a nested subagent.
 
 ### general-purpose (sonnet, all tools)
 
@@ -63,19 +63,23 @@ Override strategy: ship in `agents/` and verify a plugin agent named `general-pu
 
 From `feature-dev`. Extracts existing patterns and conventions, commits to one architecture, returns a full blueprint: components with file paths, implementation map, data flow, phased build sequence. Dispatched during superpowers brainstorming/design phases and by `/root`.
 
-### code-reviewer (opus, read-only + Bash + Skill)
+### code-reviewer (opus, read-only + Bash + Agent)
 
 Merged from the `feature-dev` and `pr-review-toolkit` reviewers (same core prompt upstream) plus the superpowers reviewer template's output contract:
 
 - Reviews a diff (unstaged by default; base/head SHAs when given) against CLAUDE.md guidance, bugs, and quality.
 - 0–100 confidence rubric; reports only findings ≥ 80. Upstream false-positive exclusion list retained.
 - Absorbs the `silent-failure-hunter` and `type-design-analyzer` lenses as named checklist sections (error-handling audit; type invariant strength).
-- Peer escalation: for final/pre-merge reviews, cross-checks P0/P1 findings with two non-Claude vendors via the `peer` skill; reports agreement/disagreement per finding.
+- Peer escalation: for final/pre-merge reviews, cross-checks P0/P1 findings with two non-Claude vendors via parallel nested `peer` dispatches; reports agreement/disagreement per finding.
 - Output: Critical / Important / Minor buckets with file:line and concrete fix — the format superpowers `receiving-code-review` consumes.
 
-### security-reviewer (fable, read-only + Bash + Skill)
+### security-reviewer (fable, read-only + Bash + Agent)
 
 New; complements the passive `security-guidance` hooks with an on-demand deep audit: injection, secrets handling, authz/authn, crypto misuse, SSRF, deserialization, dependency risk. Same ≥ 80 confidence bar. Peer escalation routes to `gpt-5.6-sol-xhigh` first (observed to be a strong security reviewer), second vendor optional.
+
+### peer (haiku, Bash + Read)
+
+Lightweight proxy over the Cursor CLI: forwards one self-contained prompt to one non-Claude vendor model (`--mode ask`, headless JSON) and relays the `.result` verbatim, plus the `session_id` for `--resume` follow-ups. Callers wanting a second + third opinion dispatch two peers in parallel, one per vendor. Absorbs the former `peer` skill's vendor table, read-only invocation contract, and the redaction guard (secret values never leave for an outside vendor — file:line and secret type only). Haiku is deliberate: the intelligence is the vendor's; the proxy only forwards and relays.
 
 ### test-analyzer (sonnet, read-only)
 
@@ -111,10 +115,6 @@ Adapted from `pr-review-toolkit`'s `/review-pr`, parallel by default.
 4. **Aggregate**: Critical / Important / Suggestions; peer agreement/disagreement flagged per finding. Peer escalation happens inside the reviewer agents, not the skill.
 5. **simplify** (optional, after a passing review): dispatch `general-purpose` with the simplifier prompt embedded in this skill.
 
-### /peer — second/third opinion (relocated)
-
-Moved verbatim from `~/.claude/skills/peer` into the plugin; the plugin copy becomes the source of truth and the user-level directory is removed at install to avoid duplicate `/peer` resolution. Reviewer agents and the delegation map reference it by skill name, so the move is invisible to them.
-
 ### /root — orchestrator mode
 
 Main-session skill (not an agent: subagents are non-interactive and lose superpowers context).
@@ -142,7 +142,7 @@ Declared in `plugin.json` if the manifest supports a dependency field; documente
 |---|---|---|
 | superpowers (plugin) | Required | Process skills governing `/root` and review workflows; `receiving-code-review` output contract |
 | security-guidance (plugin) | Recommended | Passive security coverage that `security-reviewer` complements |
-| Cursor CLI (`agent` binary, authenticated) | Required for peer escalation | `peer` skill, `code-reviewer`, `security-reviewer` |
+| Cursor CLI (`agent` binary, authenticated) | Required for peer escalation | `peer` agent |
 | codebase-memory-mcp (MCP server) | Recommended | Exploration delegation (`trace_path`, `get_architecture`); workflows fall back to `Explore` when absent |
 | `gh` CLI | Required for PR-scoped `/review` | `/review` scope resolution |
 
@@ -151,7 +151,7 @@ Declared in `plugin.json` if the manifest supports a dependency field; documente
 1. Plugin agent named `general-purpose` shadows the built-in → else symlink fallback.
 2. `model: fable` accepted in agent frontmatter → else full model ID string.
 3. `/root` hook can distinguish main-session from subagent tool calls → else instruction-only.
-4. Reviewer agents can invoke the `peer` skill from a subagent context (Skill tool availability) → else embed the minimal Cursor CLI invocation contract in the agent prompt.
+4. Reviewer agents can spawn the `peer` agent as a nested subagent (Agent in their tools allowlist; Claude Code ≥ 2.1.172) → else the controller/`/review` dispatches `peer` after reviewers return.
 5. `plugin.json` supports declaring a plugin dependency (superpowers) → else README-only.
 
 ## Testing
@@ -164,4 +164,4 @@ Declared in `plugin.json` if the manifest supports a dependency field; documente
 ## Sources
 
 - `anthropics/claude-code` plugins: `code-review`, `feature-dev`, `pr-review-toolkit`, `security-guidance` (kept installed).
-- Local: superpowers 6.1.1, `~/.claude/skills/peer` (absorbed into the plugin).
+- Local: superpowers 6.1.1, `~/.claude/skills/peer` (absorbed into the `peer` agent).

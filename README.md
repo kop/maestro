@@ -1,6 +1,6 @@
 # kop-kit
 
-Personal Claude Code plugin: model-tiered agents and orchestration skills, adapted from the official code-review, feature-dev, pr-review-toolkit plugins and integrated with superpowers and the peer skill.
+Personal Claude Code plugin: model-tiered agents and orchestration skills, adapted from the official code-review, feature-dev, pr-review-toolkit plugins and integrated with superpowers; outside opinions via the Cursor CLI (peer agent).
 
 ## Install
 
@@ -8,8 +8,6 @@ Personal Claude Code plugin: model-tiered agents and orchestration skills, adapt
     claude plugin marketplace add ~/code/kop/claude-code
     claude plugin install kop-kit@kop
     mkdir -p ~/.claude/agents && ln -sf ~/code/kop/claude-code/agents/general-purpose.md ~/.claude/agents/general-purpose.md
-
-Remove any pre-existing `~/.claude/skills/peer` — the plugin ships `/peer`.
 
 To pick up changes after editing the plugin source: `claude plugin update kop-kit@kop`.
 
@@ -23,6 +21,7 @@ To pick up changes after editing the plugin source: `claude plugin update kop-ki
 | security-reviewer | fable | Deep security audit, peer cross-check via gpt-5.6-sol |
 | test-analyzer | sonnet | Behavioral test-coverage review |
 | comment-analyzer | sonnet | Comment truthfulness + house comment discipline |
+| peer | haiku | Proxy to non-Claude vendors (Cursor CLI); reviewers spawn it nested for cross-checks |
 
 Haiku triage runs via the Agent tool's per-dispatch model override — no agent file.
 
@@ -30,7 +29,6 @@ Haiku triage runs via the Agent tool's per-dispatch model override — no agent 
 
 - `/review [aspects] [target]` — parallel multi-aspect review (code, security, tests, comments, simplify, all)
 - `/root` — orchestrator mode: all work delegated, main session prohibited from direct edits
-- `/peer` — second/third opinion via Cursor CLI (GPT, Gemini, Grok)
 
 ## Dependencies
 
@@ -38,7 +36,7 @@ Haiku triage runs via the Agent tool's per-dispatch model override — no agent 
 |---|---|
 | superpowers (plugin) | Required — process skills; review output contract |
 | security-guidance (plugin) | Recommended — passive security hooks this kit complements |
-| Cursor CLI (`agent`, authenticated) | Required for peer escalation |
+| Cursor CLI (`agent`, authenticated) | Required for the peer agent |
 | codebase-memory-mcp | Recommended — exploration; falls back to Explore agent |
 | `gh` CLI | Required for PR-scoped /review |
 
