@@ -19,9 +19,8 @@ Skip when the diff touches 3 or fewer files. Otherwise dispatch one Explore agen
 
 ## 3. Dispatch — parallel, in a single message
 
-A requested aspect forces its agent (`code` → code-reviewer, `security` → security-reviewer, `tests` → test-analyzer, `comments` → comment-analyzer); `all` dispatches all four. Without explicit aspects, auto-detect:
+code-reviewer is always dispatched, regardless of aspects. A requested aspect additionally forces its agent (`security` → security-reviewer, `tests` → test-analyzer, `comments` → comment-analyzer); `all` dispatches all four. Without explicit aspects, auto-detect:
 
-- code-reviewer: always.
 - security-reviewer: aspect `security` requested, or the diff touches auth/session code, input parsing, crypto, network fetch, or dependency manifests.
 - test-analyzer: test files changed, or code changed with no test changes.
 - comment-analyzer: comments or docs added/modified.
