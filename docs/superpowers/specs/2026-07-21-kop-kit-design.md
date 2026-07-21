@@ -4,7 +4,7 @@ Design spec, 2026-07-21.
 
 ## Goal
 
-A single personal Claude Code plugin providing specialized subagents (each with a pinned model and minimal tools) and orchestration skills, adapted from the official `code-review`, `feature-dev`, `pr-review-toolkit`, and `security-guidance` plugins. Agents must work both standalone (dispatched directly or via `/review`) and as workers inside superpowers workflows (`brainstorming`, `writing-plans`, `subagent-driven-development`, `requesting-code-review`). Outside opinions flow through the `peer` agent, a haiku proxy over the Cursor CLI (GPT / Gemini / Grok).
+A single personal Claude Code plugin providing specialized subagents (each with a pinned model and minimal tools) and orchestration, adapted from the official `code-review`, `feature-dev`, `pr-review-toolkit`, and `security-guidance` plugins. Agents must work both standalone (dispatched directly or via `/review`) and as workers inside superpowers workflows (`brainstorming`, `writing-plans`, `subagent-driven-development`, `requesting-code-review`). Outside opinions flow through the `peer` agent, a haiku proxy over the Cursor CLI (GPT / Gemini / Grok).
 
 Non-goals:
 - No port of the `/feature-dev` 7-phase command — superpowers owns the feature pipeline.
@@ -27,12 +27,9 @@ agents/
   test-analyzer.md       # sonnet
   comment-analyzer.md    # sonnet
   peer.md                # haiku
+  maestro.md             # opus
 skills/
-  root/SKILL.md
   review/SKILL.md
-hooks/
-  hooks.json             # /root enforcement (PreToolUse)
-  root-guard.sh
 docs/superpowers/specs/
 README.md
 ```
@@ -45,13 +42,13 @@ Three tiers plus outside escalation:
 |---|---|---|
 | haiku | Triage, summaries, eligibility checks, confidence scoring | No standing agent — skills dispatch built-in `Explore`/`general-purpose` with the Agent tool's per-call `model: haiku` override |
 | sonnet | Implementation, test/comment analysis, simplification | `general-purpose`, `test-analyzer`, `comment-analyzer` |
-| opus | Judgment: architecture blueprints, review verdicts | `code-architect`, `code-reviewer` |
+| opus | Judgment: architecture blueprints, review verdicts; session orchestration | `code-architect`, `code-reviewer`, `maestro` |
 | fable | Security audit | `security-reviewer` |
 | peer (non-Claude) | Cross-check of final review findings, deadlocks, multiple opinions | `peer` agent — haiku proxy over the Cursor CLI, one vendor per dispatch; spawned nested by `code-reviewer` and `security-reviewer` (Claude Code ≥ 2.1.172), or directly by the main session |
 
 ## Agents
 
-All agents except `general-purpose` are read-only: `Glob, Grep, Read` plus the minimum extras named below. Reviewer roles additionally get `Bash` and `Agent` so they can spawn `peer` as a nested subagent.
+All agents except `general-purpose` are read-only: `Glob, Grep, Read` plus the minimum extras named below. Reviewer roles additionally get `Bash` and `Agent` so they can spawn `peer` as a nested subagent. The `maestro` orchestrator gets `Agent`, `Skill`, and `TodoWrite` (no `Bash`) so it can only delegate.
 
 ### general-purpose (sonnet, all tools)
 
@@ -61,7 +58,7 @@ Override strategy: ship in `agents/` and verify a plugin agent named `general-pu
 
 ### code-architect (opus, read-only)
 
-From `feature-dev`. Extracts existing patterns and conventions, commits to one architecture, returns a full blueprint: components with file paths, implementation map, data flow, phased build sequence. Dispatched during superpowers brainstorming/design phases and by `/root`.
+From `feature-dev`. Extracts existing patterns and conventions, commits to one architecture, returns a full blueprint: components with file paths, implementation map, data flow, phased build sequence. Dispatched during superpowers brainstorming/design phases and by `maestro`.
 
 ### code-reviewer (opus, read-only + Bash + Agent)
 
@@ -89,6 +86,10 @@ From `pr-review-toolkit`. Behavioral test-coverage review: untested error paths,
 
 From `pr-review-toolkit`. Verifies every comment claim against actual code and flags comments that restate code or will go stale. Its rubric embeds the comment-discipline policy from the user's global CLAUDE.md verbatim as review rules: default is no comment; comments only for non-obvious intent/trade-offs/constraints, matching file density, fewest words; no restating code, no cross-file references, no change-narrating prose. Embedding (rather than relying on CLAUDE.md inheritance) makes the agent portable and its rubric explicit.
 
+### maestro (opus, read-only orchestrator)
+
+The orchestrator identity, launched as the whole session: `claude --agent maestro`. Tools are `Read, Grep, Glob, Agent, Skill, TodoWrite` — no Edit/Write/NotebookEdit/Bash — and Claude Code enforces the allowlist by tool availability, so the session cannot produce an artifact: it reads, decides, tracks, talks to the user, and dispatches. Every file, command, commit, plan doc, and SDD ledger line is delegated to a worker. Replaces the former `/root` skill, whose HARD-GATE prose the model could forget; an allowlist cannot be. `--agent` boots the main interactive loop, so questions, menus, CLAUDE.md, and skills keep working — a dispatched subagent could not do those, which is why the orchestrator is a launch identity, not a subagent.
+
 ### Cut from upstream, and where the capability lives now
 
 | Upstream agent | Disposition |
@@ -115,16 +116,7 @@ Adapted from `pr-review-toolkit`'s `/review-pr`, parallel by default.
 4. **Aggregate**: Critical / Important / Suggestions; peer agreement/disagreement flagged per finding. Peer escalation happens inside the reviewer agents, not the skill.
 5. **simplify** (optional, after a passing review): dispatch `general-purpose` with the simplifier prompt embedded in this skill.
 
-### /root — orchestrator mode
-
-Main-session skill (not an agent: subagents are non-interactive and lose superpowers context).
-
-- Turns the session into a pure orchestrator: prohibited from Edit/Write/NotebookEdit and implementation Bash; allowed to dispatch agents, read reports, and talk to the user.
-- Delegation map: explore → `Explore`/codebase-memory-mcp · design → `code-architect` · implement → `general-purpose` · review → `/review` roster · security → `security-reviewer` · opinions/deadlock → `peer`.
-- Subordinate to superpowers process skills: brainstorming/writing-plans/SDD decide what happens; `/root` forces who does it.
-- Mode persists until the user ends it.
-
-**Enforcement hook**: `PreToolUse` hook shipped with the plugin. The skill toggles a session-scoped marker file; while present, the hook denies Edit/Write/NotebookEdit and mutating Bash from the main session. Implementation gate: verify the hook can distinguish main-session tool calls from subagent tool calls (else it would block dispatched implementers); if it cannot, ship `/root` instruction-only with HARD-GATE prose and drop the hook.
+Orchestrator mode lives in the `maestro` agent (see Agents), not a skill — a `tools` allowlist enforced at launch beats HARD-GATE prose a skill can forget.
 
 ## Superpowers wiring
 
@@ -140,7 +132,7 @@ Declared in `plugin.json` if the manifest supports a dependency field; documente
 
 | Dependency | Kind | Used by |
 |---|---|---|
-| superpowers (plugin) | Required | Process skills governing `/root` and review workflows; `receiving-code-review` output contract |
+| superpowers (plugin) | Required | Process skills governing `maestro` and review workflows; `receiving-code-review` output contract |
 | security-guidance (plugin) | Recommended | Passive security coverage that `security-reviewer` complements |
 | Cursor CLI (`agent` binary, authenticated) | Required for peer escalation | `peer` agent |
 | codebase-memory-mcp (MCP server) | Recommended | Exploration delegation (`trace_path`, `get_architecture`); workflows fall back to `Explore` when absent |
@@ -150,7 +142,7 @@ Declared in `plugin.json` if the manifest supports a dependency field; documente
 
 1. Plugin agent named `general-purpose` shadows the built-in → else symlink fallback.
 2. `model: fable` accepted in agent frontmatter → else full model ID string.
-3. `/root` hook can distinguish main-session from subagent tool calls → else instruction-only.
+3. `claude --agent maestro` runs the main session under the agent's `tools` allowlist as a hard restriction — Edit/Write/Bash uncallable, not merely discouraged → confirmed by headless probe; no enforcement hook needed.
 4. Reviewer agents can spawn the `peer` agent as a nested subagent (Agent in their tools allowlist; Claude Code ≥ 2.1.172) → else the controller/`/review` dispatches `peer` after reviewers return.
 5. `plugin.json` supports declaring a plugin dependency (superpowers) → else README-only.
 
@@ -158,7 +150,7 @@ Declared in `plugin.json` if the manifest supports a dependency field; documente
 
 - Each agent standalone on a sample diff in a scratch repo: correct model shows in dispatch, output format matches contract, read-only agents cannot write.
 - `/review` end-to-end on a branch with seeded bugs (logic bug, silent catch, stale comment, missing negative test, hardcoded secret): each lands in the right agent's findings; peer cross-check runs for P0/P1.
-- `/root` session: implementation request → main session refuses to edit, dispatches `general-purpose`; hook (if shipped) blocks a direct main-session Edit but not the subagent's.
+- `claude --agent maestro`: implementation request → the session has no Edit/Write/Bash tool to call, so it dispatches `general-purpose`; a direct edit is impossible (tool absent), not merely refused.
 - Superpowers SDD task cycle: per-task review arrives from `code-reviewer`, not the generic template.
 
 ## Sources

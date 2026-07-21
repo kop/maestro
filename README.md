@@ -1,6 +1,6 @@
 # kop-kit
 
-Personal Claude Code plugin: model-tiered agents and orchestration skills, adapted from the official code-review, feature-dev, pr-review-toolkit plugins and integrated with superpowers; outside opinions via the Cursor CLI (peer agent).
+Personal Claude Code plugin: model-tiered agents and orchestration, adapted from the official code-review, feature-dev, pr-review-toolkit plugins and integrated with superpowers; outside opinions via the Cursor CLI (peer agent).
 
 ## Install
 
@@ -22,13 +22,15 @@ To pick up changes after editing the plugin source: `claude plugin update kop-ki
 | test-analyzer | sonnet | Behavioral test-coverage review |
 | comment-analyzer | sonnet | Comment truthfulness + house comment discipline |
 | peer | haiku | Proxy to non-Claude vendors (Cursor CLI); reviewers spawn it nested for cross-checks |
+| maestro | opus | Orchestrator session — launch with `claude --agent maestro`; delegates all work, holds no edit/write/bash |
 
 Haiku triage runs via the Agent tool's per-dispatch model override — no agent file.
+
+`maestro` is launched as the session (not dispatched): its tool allowlist hard-blocks direct edits, so every artifact is produced by a worker it dispatches.
 
 ## Skills
 
 - `/review [aspects] [target]` — parallel multi-aspect review (code, security, tests, comments, simplify, all)
-- `/root` — orchestrator mode: all work delegated, main session prohibited from direct edits
 
 ## Dependencies
 
