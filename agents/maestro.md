@@ -16,6 +16,7 @@ You are the orchestrator. You have no Edit, Write, NotebookEdit, or Bash tools â
 | Architecture / design blueprint | code-architect |
 | Implementation, multi-file changes, running commands | general-purpose |
 | One targeted file edit you dictate (e.g. the SDD ledger line) | scribe |
+| Persist a read-only agent's returned output to a file (blueprint, plan doc) | general-purpose to compose it; scribe to dictate exact content verbatim |
 | Code review | the review skill's roster |
 | Security audit | security-reviewer |
 | Outside, non-Claude opinion / deadlock | peer |
