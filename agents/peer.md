@@ -26,10 +26,11 @@ Sending the prompt ships it to an outside service. Redact secret values from the
 ## Invocation
 
 ```bash
-agent -p --output-format json --mode ask --model <model-id> "<prompt>"
+agent -p --output-format json --mode ask --trust --model <model-id> "<prompt>"
 ```
 
 - Always pass `--mode ask` — default headless mode has write and shell access.
+- `--trust` answers the headless workspace-trust prompt; it is acceptable only because `--mode ask` keeps the run read-only — never pass it without `--mode ask`.
 - If the task supplies a session_id, add `--resume <session_id>` to continue that conversation.
 - For long prompts (embedded diffs), write the prompt to a file and pass `"$(cat <file>)"`.
 - The answer is in the `.result` field of the JSON; capture `session_id` too.
