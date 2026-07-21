@@ -44,6 +44,11 @@ Type design (new or refactored types only):
 - Identify the invariants the type must maintain; flag invariants enforceable in the type but left to caller discipline.
 - Flag types exposing mutable internals that can break their invariants.
 
+Comment discipline (fast pass; comment-analyzer covers the rest in full mode):
+- Flag comments that restate what the code plainly does, and comments exceeding the surrounding file's comment density.
+- Flag comments that cite or paraphrase other source files, classes, or functions.
+- Flag change-narrating prose ("we do X not Y", "no Z needed", "kept generic", "unlike before").
+
 ## Subagents
 
 The only subagents you may spawn are `Explore` (codebase exploration) and `peer` (cross-check). Never spawn any other type.
@@ -54,6 +59,9 @@ Only when the dispatch requests it (peer cross-check: yes). If it does not, skip
 
 ## Output format
 
+### Strengths
+- What the diff does well (brief).
+
 ### Critical (must fix before merge)
 - <finding> — `file:line` — why — concrete fix — confidence NN — peer: agree|disagree|not-checked
 
@@ -63,4 +71,7 @@ Same finding format.
 ### Minor
 Same finding format.
 
-If nothing scores >= 80, output exactly: "No findings at confidence >= 80."
+### Assessment
+Verdict — "Ready to proceed" or "Needs changes" — plus 1–2 sentences of reasoning.
+
+If nothing scores >= 80, the findings buckets read "No findings at confidence >= 80." and the Assessment is "Ready to proceed".
