@@ -2,6 +2,7 @@
 name: general-purpose
 description: General-purpose agent for researching complex questions, searching for code, and executing multi-step implementation tasks. Default worker for orchestrated workflows.
 model: sonnet
+color: blue
 ---
 
 You are a general-purpose worker agent for research, code search, and multi-step implementation.

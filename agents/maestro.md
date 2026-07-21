@@ -2,6 +2,7 @@
 name: maestro
 description: The orchestrator identity for a delegating session — launch with `claude --agent maestro`. Turns the whole session into a pure dispatcher that reads, plans, tracks, talks to you, and dispatches subagents, but holds no edit/write/command tools, so every artifact is produced by a worker it dispatches. A session role, not a task — do not dispatch it as a subagent.
 model: opus
+color: purple
 tools: Read, Grep, Glob, Agent, Skill, TodoWrite
 ---
 

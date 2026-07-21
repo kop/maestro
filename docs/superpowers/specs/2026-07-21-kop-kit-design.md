@@ -49,7 +49,9 @@ Three tiers plus outside escalation:
 
 ## Agents
 
-All agents except `general-purpose` are read-only: `Glob, Grep, Read` plus the minimum extras named below. Reviewer roles additionally get `Bash` and `Agent` so they can spawn `peer` as a nested subagent. The `maestro` orchestrator gets `Agent`, `Skill`, and `TodoWrite` (no `Bash`) so it can only delegate.
+All agents except `general-purpose` are read-only: `Glob, Grep, Read` plus the minimum extras named below. `Bash` on the review agents exists only to fetch the diff (`git diff`, `gh pr diff`) for standalone use — none of them run anything else. `code-reviewer` and `security-reviewer` also get `Agent` so they can spawn `peer` as a nested subagent. The `maestro` orchestrator gets `Agent`, `Skill`, and `TodoWrite` (no `Bash`) so it can only delegate.
+
+Tool access is an allowlist, so a restrictive `tools` field also strips the inherited MCP tools. The analysis agents that benefit from graph-level code understanding (`code-architect`, `code-reviewer`, `security-reviewer`, `test-analyzer`) therefore name the read-only `codebase-memory-mcp` tools (`search_code`, `search_graph`, `trace_path`, `get_code_snippet`, `get_architecture`, `query_graph`, `get_graph_schema`) explicitly in their allowlist — read-only only, never the indexing/`delete_project` writes. When the server is absent these entries simply don't resolve and the agent falls back to `Grep`/`Glob`/`Read`, so the dependency stays recommended, not required. Because these ship as plugin agents, the `mcpServers`, `permissionMode`, and `hooks` frontmatter fields are ignored — MCP can only reach an agent through its `tools` allowlist, which is why the grant is done there. `memory` is deliberately unused: it force-enables `Write`/`Edit`, which would break every read-only guarantee. Each agent sets a `color` for the task list; the four `/review` reviewers plus `peer` carry distinct colors (green, red, cyan, yellow, orange) so a full fan-out is legible at a glance.
 
 ### general-purpose (sonnet, all tools)
 
@@ -57,11 +59,11 @@ The implementer, and an override that pins the built-in `general-purpose` to son
 
 Override strategy: ship in `agents/` and verify a plugin agent named `general-purpose` shadows the built-in. If it does not, symlink it to `~/.claude/agents/general-purpose.md` (README install step); the plugin copy remains the source of truth.
 
-### code-architect (opus, read-only)
+### code-architect (opus, read-only + codebase-memory read tools)
 
 From `feature-dev`. Extracts existing patterns and conventions, commits to one architecture, returns a full blueprint: components with file paths, implementation map, data flow, phased build sequence. Dispatched during superpowers brainstorming/design phases and by `maestro`.
 
-### code-reviewer (opus, read-only + Bash + Agent)
+### code-reviewer (opus, read-only + Bash + Agent + codebase-memory read tools)
 
 Merged from the `feature-dev` and `pr-review-toolkit` reviewers (same core prompt upstream) plus the superpowers reviewer template's output contract:
 
@@ -71,7 +73,7 @@ Merged from the `feature-dev` and `pr-review-toolkit` reviewers (same core promp
 - Peer escalation: when the dispatch requests it (`peer cross-check: yes`, set by `/review` full mode), cross-checks P0/P1 findings with two non-Claude vendors via parallel nested `peer` dispatches; reports agreement/disagreement per finding. Off by default, so quick reviews and direct per-task dispatches don't escalate.
 - Output: Critical / Important / Minor buckets with file:line and concrete fix — the format superpowers `receiving-code-review` consumes.
 
-### security-reviewer (fable, read-only + Bash + Agent)
+### security-reviewer (fable, read-only + Bash + Agent + codebase-memory read tools)
 
 New; complements the passive `security-guidance` hooks with an on-demand deep audit: injection, secrets handling, authz/authn, crypto misuse, SSRF, deserialization, dependency risk. Same ≥ 80 confidence bar. Peer escalation, when the dispatch requests it, routes OpenAI-first (its flagship observed to be a strong security reviewer), second vendor optional.
 
@@ -79,11 +81,11 @@ New; complements the passive `security-guidance` hooks with an on-demand deep au
 
 Lightweight proxy over the Cursor CLI: forwards one self-contained prompt to one non-Claude vendor model (`--mode ask`, headless JSON) and relays the `.result` verbatim, plus the `session_id` for `--resume` follow-ups. Callers wanting a second + third opinion dispatch two peers in parallel, one per vendor. Every run preflights `agent --list-models` — verifying the CLI works and selecting the vendor's newest flagship by model family rather than a hardcoded ID, so consults auto-upgrade as flagships change; a CLI failure is reported verbatim, never papered over. Absorbs the former `peer` skill's read-only invocation contract and the redaction guard (secret values never leave for an outside vendor — file:line and secret type only). Haiku is deliberate: the intelligence is the vendor's; the proxy only forwards and relays.
 
-### test-analyzer (sonnet, read-only)
+### test-analyzer (sonnet, read-only + Bash + codebase-memory read tools)
 
 From `pr-review-toolkit`. Behavioral test-coverage review: untested error paths, edge cases, missing negative tests; each recommended test rated 1–10 criticality with the specific regression it would catch.
 
-### comment-analyzer (sonnet, read-only)
+### comment-analyzer (sonnet, read-only + Bash)
 
 From `pr-review-toolkit`. Verifies every comment claim against actual code and flags comments that restate code or will go stale. Its rubric embeds the comment-discipline policy from the user's global CLAUDE.md verbatim as review rules: default is no comment; comments only for non-obvious intent/trade-offs/constraints, matching file density, fewest words; no restating code, no cross-file references, no change-narrating prose. Embedding (rather than relying on CLAUDE.md inheritance) makes the agent portable and its rubric explicit.
 

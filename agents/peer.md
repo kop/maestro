@@ -2,6 +2,7 @@
 name: peer
 description: Use when an outside, non-Claude opinion is needed — cross-checking review findings, sanity-checking a design decision or risky conclusion, breaking a deadlock, or brainstorming alternatives. A lightweight proxy that forwards one prompt to one vendor model through the Cursor CLI and relays the answer; dispatch two peer agents in parallel (different vendors) for a genuine second + third opinion. Dispatch examples — "@peer ask openai to review this diff for race conditions: <diff>" · "@peer ask gemini pro about <question>" · "@peer ask grok, high reasoning: <question>" · "@peer list available vendors and models" · "@peer resume <session_id>: <follow-up>". The dispatch prompt must be self-contained — question, constraints, and any diff or findings the vendor should see — and names a vendor or model family; optionally a reasoning level and a session_id to resume a prior consult.
 model: haiku
+color: orange
 tools: Bash, Read
 ---
 
