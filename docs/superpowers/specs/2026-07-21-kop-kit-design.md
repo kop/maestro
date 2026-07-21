@@ -29,6 +29,7 @@ agents/
 skills/
   root/SKILL.md
   review/SKILL.md
+  peer/SKILL.md
 hooks/
   hooks.json             # /root enforcement (PreToolUse)
   root-guard.sh
@@ -82,7 +83,7 @@ From `pr-review-toolkit`. Behavioral test-coverage review: untested error paths,
 
 ### comment-analyzer (sonnet, read-only)
 
-From `pr-review-toolkit`. Verifies every comment claim against actual code and flags comments that restate code or will go stale, enforcing the user's strict comment discipline (default is no comment).
+From `pr-review-toolkit`. Verifies every comment claim against actual code and flags comments that restate code or will go stale. Its rubric embeds the comment-discipline policy from the user's global CLAUDE.md verbatim as review rules: default is no comment; comments only for non-obvious intent/trade-offs/constraints, matching file density, fewest words; no restating code, no cross-file references, no change-narrating prose. Embedding (rather than relying on CLAUDE.md inheritance) makes the agent portable and its rubric explicit.
 
 ### Cut from upstream, and where the capability lives now
 
@@ -110,6 +111,10 @@ Adapted from `pr-review-toolkit`'s `/review-pr`, parallel by default.
 4. **Aggregate**: Critical / Important / Suggestions; peer agreement/disagreement flagged per finding. Peer escalation happens inside the reviewer agents, not the skill.
 5. **simplify** (optional, after a passing review): dispatch `general-purpose` with the simplifier prompt embedded in this skill.
 
+### /peer — second/third opinion (relocated)
+
+Moved verbatim from `~/.claude/skills/peer` into the plugin; the plugin copy becomes the source of truth and the user-level directory is removed at install to avoid duplicate `/peer` resolution. Reviewer agents and the delegation map reference it by skill name, so the move is invisible to them.
+
 ### /root — orchestrator mode
 
 Main-session skill (not an agent: subagents are non-interactive and lose superpowers context).
@@ -129,12 +134,25 @@ Superpowers' cache cannot be edited. Integration is one line in `~/.claude/CLAUD
 
 User instructions outrank skills, so this rewires `requesting-code-review` and SDD per-task reviews without forking superpowers.
 
+## Dependencies
+
+Declared in `plugin.json` if the manifest supports a dependency field; documented in the README regardless.
+
+| Dependency | Kind | Used by |
+|---|---|---|
+| superpowers (plugin) | Required | Process skills governing `/root` and review workflows; `receiving-code-review` output contract |
+| security-guidance (plugin) | Recommended | Passive security coverage that `security-reviewer` complements |
+| Cursor CLI (`agent` binary, authenticated) | Required for peer escalation | `peer` skill, `code-reviewer`, `security-reviewer` |
+| codebase-memory-mcp (MCP server) | Recommended | Exploration delegation (`trace_path`, `get_architecture`); workflows fall back to `Explore` when absent |
+| `gh` CLI | Required for PR-scoped `/review` | `/review` scope resolution |
+
 ## Verification points (implementation gates)
 
 1. Plugin agent named `general-purpose` shadows the built-in → else symlink fallback.
 2. `model: fable` accepted in agent frontmatter → else full model ID string.
 3. `/root` hook can distinguish main-session from subagent tool calls → else instruction-only.
 4. Reviewer agents can invoke the `peer` skill from a subagent context (Skill tool availability) → else embed the minimal Cursor CLI invocation contract in the agent prompt.
+5. `plugin.json` supports declaring a plugin dependency (superpowers) → else README-only.
 
 ## Testing
 
@@ -146,4 +164,4 @@ User instructions outrank skills, so this rewires `requesting-code-review` and S
 ## Sources
 
 - `anthropics/claude-code` plugins: `code-review`, `feature-dev`, `pr-review-toolkit`, `security-guidance` (kept installed).
-- Local: superpowers 6.1.1, `~/.claude/skills/peer`.
+- Local: superpowers 6.1.1, `~/.claude/skills/peer` (absorbed into the plugin).
