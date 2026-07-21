@@ -1,15 +1,15 @@
-# kop-kit
+# maestro
 
 Personal Claude Code plugin: model-tiered agents and orchestration, adapted from the official code-review, feature-dev, pr-review-toolkit plugins and integrated with superpowers; outside opinions via the Cursor CLI (peer agent).
 
 ## Install
 
-    git clone git@github.com:kop/claude-code.git ~/code/kop/claude-code
-    claude plugin marketplace add ~/code/kop/claude-code
-    claude plugin install kop-kit@kop
-    mkdir -p ~/.claude/agents && ln -sf ~/code/kop/claude-code/agents/general-purpose.md ~/.claude/agents/general-purpose.md
+    git clone git@github.com:kop/maestro.git ~/code/kop/maestro
+    claude plugin marketplace add ~/code/kop/maestro
+    claude plugin install maestro@kop
+    mkdir -p ~/.claude/agents && ln -sf ~/code/kop/maestro/agents/general-purpose.md ~/.claude/agents/general-purpose.md
 
-To pick up changes after editing the plugin source: `claude plugin update kop-kit@kop`.
+To pick up changes after editing the plugin source: `claude plugin update maestro@kop`.
 
 ## Agents
 
