@@ -68,12 +68,12 @@ Merged from the `feature-dev` and `pr-review-toolkit` reviewers (same core promp
 - Reviews a diff (unstaged by default; base/head SHAs when given) against CLAUDE.md guidance, bugs, and quality.
 - 0–100 confidence rubric; reports only findings ≥ 80. Upstream false-positive exclusion list retained.
 - Absorbs the `silent-failure-hunter` and `type-design-analyzer` lenses as named checklist sections (error-handling audit; type invariant strength).
-- Peer escalation: for final/pre-merge reviews, cross-checks P0/P1 findings with two non-Claude vendors via parallel nested `peer` dispatches; reports agreement/disagreement per finding.
+- Peer escalation: when the dispatch requests it (`peer cross-check: yes`, set by `/review` full mode), cross-checks P0/P1 findings with two non-Claude vendors via parallel nested `peer` dispatches; reports agreement/disagreement per finding. Off by default, so quick reviews and direct per-task dispatches don't escalate.
 - Output: Critical / Important / Minor buckets with file:line and concrete fix — the format superpowers `receiving-code-review` consumes.
 
 ### security-reviewer (fable, read-only + Bash + Agent)
 
-New; complements the passive `security-guidance` hooks with an on-demand deep audit: injection, secrets handling, authz/authn, crypto misuse, SSRF, deserialization, dependency risk. Same ≥ 80 confidence bar. Peer escalation routes OpenAI-first (its flagship observed to be a strong security reviewer), second vendor optional.
+New; complements the passive `security-guidance` hooks with an on-demand deep audit: injection, secrets handling, authz/authn, crypto misuse, SSRF, deserialization, dependency risk. Same ≥ 80 confidence bar. Peer escalation, when the dispatch requests it, routes OpenAI-first (its flagship observed to be a strong security reviewer), second vendor optional.
 
 ### peer (haiku, Bash + Read)
 
@@ -107,19 +107,22 @@ The orchestrator identity, launched as the whole session: `claude --agent maestr
 
 ## Skills
 
-### /review — aspect-dispatching review
+### /review — quick or full review
 
-Adapted from `pr-review-toolkit`'s `/review-pr`, parallel by default.
+Adapted from `pr-review-toolkit`'s `/review-pr`, parallel by default. Two modes; default full.
+
+- **quick** — dispatches only `code-reviewer`, peer cross-check off, triage skipped. The fast per-task pass.
+- **full** — triage, then all four reviewer agents in parallel with peer cross-check on. The end-to-end gate.
 
 1. **Scope**: resolve target from args — unstaged diff (default), `main...HEAD`, or PR number via `gh`.
-2. **Triage**: one `Explore` dispatch at `model: haiku` — change summary, changed files, relevant CLAUDE.md paths. Skipped for small diffs.
-3. **Dispatch** (parallel, single message), aspects from args (`code`, `security`, `tests`, `comments`, `simplify`, `all`) or auto-detected:
-   - `code-reviewer` — always
-   - `security-reviewer` — `security` aspect, or auto when auth/input-handling/crypto/dependency files are touched
-   - `test-analyzer` — tests changed, or code changed without tests
-   - `comment-analyzer` — comments/docs added or modified
-4. **Aggregate**: Critical / Important / Suggestions; peer agreement/disagreement flagged per finding. Peer escalation happens inside the reviewer agents, not the skill.
+2. **Triage** (full only): one `Explore` dispatch at `model: haiku` — change summary, changed files, relevant CLAUDE.md paths. Skipped for small diffs.
+3. **Dispatch** (parallel, single message):
+   - quick → `code-reviewer` alone, told `peer cross-check: no`.
+   - full → `code-reviewer` + `security-reviewer` + `test-analyzer` + `comment-analyzer`, each told `peer cross-check: yes`. Explicit aspect args (`code`, `security`, `tests`, `comments`, `all`) narrow full to `code-reviewer` plus the named agents; `all` forces the complete set.
+4. **Aggregate**: Critical / Important / Suggestions; peer agreement/disagreement flagged per finding. Peer escalation runs inside the reviewer agents but is driven by the skill's explicit `peer cross-check` signal, not the agent's own judgment.
 5. **simplify** (optional, after a passing review): dispatch `general-purpose` with the simplifier prompt embedded in this skill.
+
+The two modes map to the two review entry points. A superpowers per-task cycle dispatches the `code-reviewer` agent directly — quick by construction (single reviewer, no peer). Full is the `/review` skill invoked by a human or `maestro` at branch end; a subagent cannot invoke a fan-out skill, so full review is always a main-loop invocation.
 
 Orchestrator mode lives in the `maestro` agent (see Agents), not a skill — a `tools` allowlist enforced at launch beats HARD-GATE prose a skill can forget.
 

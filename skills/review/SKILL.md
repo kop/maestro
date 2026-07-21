@@ -1,11 +1,18 @@
 ---
 name: review
-description: Use for multi-aspect code review — dispatches specialized reviewer agents (code, security, tests, comments) in parallel over a diff or PR and aggregates findings. Triggered by /review [aspects] [target].
+description: Use for code review — dispatches reviewer agents over a diff or PR and aggregates findings. Two modes — quick (code-reviewer only) and full (all reviewers + peer cross-check). Triggered by /review [quick|full] [aspects] [target].
 ---
 
-# Review — aspect-dispatching code review
+# Review — quick or full code review
 
-Arguments: aspects (`code`, `security`, `tests`, `comments`, `simplify`, `all`) and/or a target (PR number, branch name, or nothing). Unrecognized words are the target. No aspects given = auto-detect per the dispatch rules below.
+Two modes:
+
+- **quick** — dispatches only code-reviewer, no peer cross-check, no triage. Fast pass for a tight review loop (e.g. a subagent-driven-development per-task cycle).
+- **full** — triage, then all four reviewer agents in parallel, each with peer cross-check. The thorough end-to-end gate.
+
+Arguments: an optional mode (`quick` | `full`), optional aspects (`code`, `security`, `tests`, `comments`, `simplify`, `all`), and an optional target (PR number, branch name, or nothing). Unrecognized words are the target.
+
+**Default mode when none is given: full.** A superpowers per-task review runs quick (see the wiring note in the README); a human or maestro asking for a final/branch-end review runs full.
 
 ## 1. Scope
 
@@ -13,19 +20,17 @@ Arguments: aspects (`code`, `security`, `tests`, `comments`, `simplify`, `all`) 
 - Branch target: `git diff <branch>...HEAD`.
 - PR number: `gh pr diff <n>` and `gh pr view <n>` for context.
 
-## 2. Triage
+## 2. Triage — full only
 
-Skip when the diff touches 3 or fewer files. Otherwise dispatch one Explore agent with model haiku: return a change summary, the changed-file list, and paths of CLAUDE.md files relevant to the changed directories.
+Skip entirely in quick mode. In full mode, skip when the diff touches 3 or fewer files. Otherwise dispatch one Explore agent with model haiku: return a change summary, the changed-file list, and paths of CLAUDE.md files relevant to the changed directories.
 
 ## 3. Dispatch — parallel, in a single message
 
-code-reviewer is always dispatched, regardless of aspects. A requested aspect additionally forces its agent (`security` → security-reviewer, `tests` → test-analyzer, `comments` → comment-analyzer); `all` dispatches all four. Without explicit aspects, auto-detect:
+**quick:** dispatch code-reviewer alone. Tell it explicitly: **peer cross-check: no.**
 
-- security-reviewer: aspect `security` requested, or the diff touches auth/session code, input parsing, crypto, network fetch, or dependency manifests.
-- test-analyzer: test files changed, or code changed with no test changes.
-- comment-analyzer: comments or docs added/modified.
+**full:** dispatch all four reviewer agents — code-reviewer, security-reviewer, test-analyzer, comment-analyzer. When explicit aspects are given, narrow to code-reviewer plus the named aspects' agents instead of all four (`all` forces the complete set). Tell every dispatched reviewer explicitly: **peer cross-check: yes.**
 
-Each dispatch gets: the diff (or base/head SHAs and how to reproduce it), the triage summary, relevant CLAUDE.md paths, and the instruction to return findings in its own output contract.
+Each dispatch gets: the diff (or base/head SHAs and how to reproduce it), the triage summary if any, relevant CLAUDE.md paths, the explicit peer cross-check instruction, and the instruction to return findings in its own output contract.
 
 ## 4. Aggregate
 

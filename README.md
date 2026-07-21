@@ -31,7 +31,7 @@ Haiku triage runs via the Agent tool's per-dispatch model override — no agent 
 
 ## Skills
 
-- `/review [aspects] [target]` — parallel multi-aspect review (code, security, tests, comments, simplify, all)
+- `/review [quick|full] [aspects] [target]` — code review in two modes: **quick** (code-reviewer only, no peer) for a tight loop, **full** (all reviewers + peer cross-check) as the end-to-end gate. Human/maestro invocation defaults to full.
 
 ## Dependencies
 
@@ -48,3 +48,5 @@ Haiku triage runs via the Agent tool's per-dispatch model override — no agent 
 Add to `~/.claude/CLAUDE.md`:
 
     Code review dispatch: where a superpowers skill says to dispatch a `general-purpose` subagent for code review, dispatch the `code-reviewer` agent instead, filling the same template placeholders.
+
+Two review entry points map to the two modes. A superpowers per-task cycle dispatches the code-reviewer agent directly — a quick review by construction (single reviewer, no peer). The full mode is the `/review` skill run by a human or maestro at branch end as the end-to-end gate. A subagent cannot invoke the `/review` skill, so full review is always a main-loop invocation.

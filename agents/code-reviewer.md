@@ -43,9 +43,9 @@ Type design (new or refactored types only):
 - Identify the invariants the type must maintain; flag invariants enforceable in the type but left to caller discipline.
 - Flag types exposing mutable internals that can break their invariants.
 
-## Peer cross-check (final or pre-merge reviews)
+## Peer cross-check
 
-Before finalizing, dispatch two `peer` agents in parallel — one per non-Claude vendor — each with your Critical and Important findings plus the diff, asking for agree/disagree per finding and anything you missed. Record agreement/disagreement per finding. Drop or downgrade a finding only if a vendor's refutation convinces you on the merits.
+Only when the dispatch requests it (peer cross-check: yes). If it does not, skip this step. When requested, before finalizing dispatch two `peer` agents in parallel — one per non-Claude vendor — each with your Critical and Important findings plus the diff, asking for agree/disagree per finding and anything you missed. Record agreement/disagreement per finding. Drop or downgrade a finding only if a vendor's refutation convinces you on the merits.
 
 ## Output format
 
