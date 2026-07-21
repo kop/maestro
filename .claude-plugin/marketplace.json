@@ -1,0 +1,11 @@
+{
+  "name": "kop",
+  "owner": { "name": "kop" },
+  "plugins": [
+    {
+      "name": "kop-kit",
+      "source": "./",
+      "description": "Personal model-tiered agents and orchestration skills"
+    }
+  ]
+}
