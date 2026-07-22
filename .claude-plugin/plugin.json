@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Personal model-tiered agents and orchestration: /review skill, maestro orchestrator and peer proxy agents",
   "author": { "name": "kop" }
 }
