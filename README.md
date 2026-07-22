@@ -33,6 +33,7 @@ Haiku triage runs via the Agent tool's per-dispatch model override — no agent 
 
 - `/review [quick|full] [aspects] [target]` — code review in two modes: **quick** (code-reviewer + 1 peer) for a tight loop, **full** (all reviewers + 3 peers, 3 different vendors) as the end-to-end gate. Peers are dispatched by the orchestrator in parallel with the reviewers as independent outside reviewers. Human/maestro invocation defaults to full.
 - `/autopilot [full|batch] <goal>` — run a session unattended to completion on best judgment. **full** (default): never ask, decide-and-log under uncertainty. **batch**: one upfront round of clarifying questions after initial research, then silent to completion. Guardrails are local-only (edit/test/commit on a branch; never push, PR, or touch `main`); every uncertain decision is appended to a ledger at `docs/autopilot/<date>-<goal-slug>-ledger.md`. Assumes an auto-approving permission layer; never manages permissions itself.
+- `/feedback` — end-of-session retrospective on the plugin itself. Reviews which maestro agents and skills were actually used this session, what worked, where they underperformed, and what workflow gaps suggest new agents or skills. Report only, grounded in the session's specifics — no files written, no edits made.
 
 ## Dependencies
 
