@@ -1,14 +1,16 @@
 ---
 name: review
-description: Use for code review — dispatches reviewer agents over a diff or PR and aggregates findings. Two modes — quick (code-reviewer only) and full (all reviewers + peer cross-check). Triggered by /review [quick|full] [aspects] [target].
+description: Use for code review — dispatches reviewer agents over a diff or PR and aggregates findings. Two modes — quick (code-reviewer + 1 peer) and full (all reviewers + 3 peers). Triggered by /review [quick|full] [aspects] [target].
 ---
 
 # Review — quick or full code review
 
+Peers (non-Claude vendor reviewers via the `peer` agent) are dispatched by the orchestrator running this skill, in parallel with the Claude reviewer agents — not nested inside them. Each peer is an independent reviewer of the same diff, returning its own findings.
+
 Two modes:
 
-- **quick** — dispatches only code-reviewer, no peer cross-check, no triage. Fast pass for a tight review loop (e.g. a subagent-driven-development per-task cycle).
-- **full** — triage, then all four reviewer agents in parallel, each with peer cross-check. The thorough end-to-end gate.
+- **quick** — dispatches code-reviewer + 1 peer, no triage. Fast pass for a tight review loop (e.g. a subagent-driven-development per-task cycle).
+- **full** — triage, then all four reviewer agents + 3 peers (3 different vendors), all in parallel. The thorough end-to-end gate.
 
 Arguments: an optional mode (`quick` | `full`), optional aspects (`code`, `security`, `tests`, `comments`, `all`), and an optional target (PR number, branch name, or nothing). Unrecognized words are the target.
 
@@ -26,12 +28,16 @@ Skip entirely in quick mode. In full mode, skip when the diff touches 3 or fewer
 
 ## 3. Dispatch — parallel, in a single message
 
-**quick:** dispatch code-reviewer alone. Tell it explicitly: **peer cross-check: no.**
+Dispatch the Claude reviewer agent(s) AND the peer agent(s) together in one parallel message.
 
-**full:** dispatch all four reviewer agents — code-reviewer, security-reviewer, test-analyzer, comment-analyzer. When explicit aspects are given, narrow to code-reviewer plus the named aspects' agents instead of all four (`all` forces the complete set). Tell every dispatched reviewer explicitly: **peer cross-check: yes.**
+**quick:** code-reviewer + 1 peer. The peer targets the strongest non-Claude vendor (peer.md defaults to OpenAI).
 
-Each dispatch gets: the diff (or base/head SHAs and how to reproduce it), the triage summary if any, relevant CLAUDE.md paths, the explicit peer cross-check instruction, and the instruction to return findings in its own output contract.
+**full:** all four reviewer agents — code-reviewer, security-reviewer, test-analyzer, comment-analyzer — plus 3 peers. When explicit aspects are given, narrow the Claude reviewers to code-reviewer plus the named aspects' agents instead of all four (`all` forces the complete set); still dispatch the 3 peers. The 3 peers must target 3 different vendors (e.g. OpenAI, Gemini, and Grok) so the outside opinions are genuinely diverse.
+
+Each Claude reviewer dispatch gets: the diff (or base/head SHAs and how to reproduce it), the triage summary if any, relevant CLAUDE.md paths, and the instruction to return findings in its own output contract.
+
+Each peer dispatch is a full, self-contained independent-review prompt: the diff (or base/head SHAs + how to reproduce it), the triage summary if any, the relevant CLAUDE.md paths, the vendor to target, and the request to return its own findings (file:line, severity, why).
 
 ## 4. Aggregate
 
-Merge findings into Critical / Important / Suggestions. Keep per finding: file:line, source agent, the agent's own score (confidence or criticality) where reported, peer flag where present. Dedupe only when two agents report the same underlying issue; co-located findings about different concerns (e.g. a security defect and a missing-test-coverage gap on the same lines) stay separate line items. A test-analyzer finding that a new or changed function has no test coverage is always kept as its own item, never folded into another agent's finding on those lines, even when another agent reports the same gap. End with a recommended fix order.
+Merge findings from the Claude reviewers and the peers into Critical / Important / Suggestions. Keep per finding: file:line, source (which reviewer agent or which vendor peer raised it), and the agent's own score (confidence or criticality) where reported. Track corroboration: a finding raised by both a Claude reviewer and a peer is higher-confidence — note the agreement across sources; surface peer-only findings too. Dedupe only when two sources report the same underlying issue (fold them into one line item noting both sources); co-located findings about different concerns (e.g. a security defect and a missing-test-coverage gap on the same lines) stay separate line items. A test-analyzer finding that a new or changed function has no test coverage is always kept as its own item, never folded into another source's finding on those lines, even when another source reports the same gap. End with a recommended fix order.

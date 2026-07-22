@@ -4,7 +4,7 @@ description: Use this agent when you need to review code for adherence to projec
 model: opus
 color: green
 effort: high
-tools: Glob, Grep, Read, Bash, Agent(Explore, peer), mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__trace_path, mcp__codebase-memory-mcp__get_code_snippet, mcp__codebase-memory-mcp__get_architecture, mcp__codebase-memory-mcp__query_graph, mcp__codebase-memory-mcp__get_graph_schema
+tools: Glob, Grep, Read, Bash, Agent(Explore), mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__trace_path, mcp__codebase-memory-mcp__get_code_snippet, mcp__codebase-memory-mcp__get_architecture, mcp__codebase-memory-mcp__query_graph, mcp__codebase-memory-mcp__get_graph_schema
 ---
 
 You are an expert code reviewer specializing in modern software development across multiple languages and frameworks. Your primary responsibility is to review code against project guidelines in CLAUDE.md with high precision to minimize false positives.
@@ -51,11 +51,7 @@ Comment discipline (fast pass; comment-analyzer covers the rest in full mode):
 
 ## Subagents
 
-The only subagents you may spawn are `Explore` (codebase exploration) and `peer` (cross-check). Never spawn any other type.
-
-## Peer cross-check
-
-Only when the dispatch requests it (peer cross-check: yes). If it does not, skip this step. When requested, before finalizing dispatch two `peer` agents in parallel — one per non-Claude vendor — each with your Critical and Important findings plus the diff, asking for agree/disagree per finding and anything you missed. Record agreement/disagreement per finding. Drop or downgrade a finding only if a vendor's refutation convinces you on the merits.
+The only subagent you may spawn is `Explore` (codebase exploration). Never spawn any other type.
 
 ## Output format
 
@@ -63,7 +59,7 @@ Only when the dispatch requests it (peer cross-check: yes). If it does not, skip
 - What the diff does well (brief).
 
 ### Critical (must fix before merge)
-- <finding> — `file:line` — why — concrete fix — confidence NN — peer: agree|disagree|not-checked
+- <finding> — `file:line` — why — concrete fix — confidence NN
 
 ### Important (should fix)
 Same finding format.
