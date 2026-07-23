@@ -31,20 +31,36 @@ When any reviewer must execute commands:
 2. Create a unique directory beneath a dedicated Maestro temporary review root.
 3. Derive its name from sanitized native IDs, never issue or PR titles.
 4. Write an adjacent ownership marker containing Symphony UUID, repository,
-   PR native ID, head SHA, and review action identity.
+   PR native ID, head SHA, and review action identity. Add the reservation to
+   the cleanup ledger with attachment state `reserved-unattached`.
 5. Resolve canonical paths and verify component-level containment under the root.
-6. Add a detached Git worktree at the exact PR head SHA.
+6. Add a detached Git worktree at the exact PR head SHA, then atomically update
+   its cleanup-ledger attachment state to `attached-worktree`.
 7. Run all commands with that worktree as the exact working directory.
 8. Apply an explicit timeout to every command.
 9. Compare tracked and staged changes before and after validation.
 10. Re-read the remote PR head before publishing.
-11. Remove the expected worktree through Git, then delete only the owned review
-    directory and transient artifacts.
+11. Clean every ledger entry through its attachment-state branch; use Git removal
+    only for `attached-worktree`.
 
-Cleanup requires both a matching marker and Git metadata matching the expected
-repository/path. Never delete unmarked, mismatched, or user-created worktrees.
-Reserved setup directories may be removed only when the marker matches and no
-repository or unexpected file exists.
+Every cleanup-ledger entry records the repository, canonical owned path, marker,
+expected action identity, and explicit attachment state. Cleanup branches on
+that recorded state:
+
+- `attached-worktree` requires a matching marker and expected action identity,
+  canonical-path containment, and Git worktree metadata matching the expected
+  repository and canonical path. Remove through Git first, then remove only
+  expected owned transient artifacts.
+- `reserved-unattached` requires a matching marker and expected action identity,
+  canonical-path containment, a fresh proof that attachment state is false, and
+  proof that no repository/worktree metadata, checkout, unexpected file, or
+  unexpected contents exists. Remove only the known empty reservation and marker
+  artifacts; Git metadata is neither expected nor required.
+
+Never delete unmarked, mismatched, ambiguous, or user-created worktrees or
+reservations. Marker mismatch, unexpected contents, ambiguous attachment,
+containment failure, or Git metadata mismatch emits `cleanup-failed`, retains the
+exact owned path, and permits retry only after a new safe observation.
 
 Unexpected tracked changes invalidate evidence that depends on them. Record the
 observation, publish no patch, and discard the worktree. Build caches, screenshots,
@@ -126,6 +142,8 @@ Different concerns on the same line remain separate. A required specialist
 Before publication, verify the remote head still equals the reviewed exact PR head
 SHA. If it changed, publish nothing, classify `review-stale-head`, clean up, and
 review the new SHA on a later pass.
+
+The attachment-state cleanup branch applies on success, failure, timeout, stale head, reviewer error, and publication failure.
 
 ## Publication and Cursor follow-up
 

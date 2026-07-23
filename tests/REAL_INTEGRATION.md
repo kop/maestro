@@ -4,6 +4,9 @@ Run this profile only in a disposable Linear project/team and disposable GitHub
 repository whose branch protections and Cursor integration match production
 behavior. Never use active production issues merely to test the plugin.
 
+The disposable real integration remains the runtime validation gate; the deterministic
+failure-injection reducer is only an executable protocol oracle.
+
 Report every unavailable capability as `SKIPPED: reason`; never count it as passed.
 
 ## Preconditions

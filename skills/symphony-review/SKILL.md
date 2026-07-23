@@ -79,17 +79,19 @@ Before any command-running reviewer starts:
    review root and create one unique review directory beneath it.
 3. Derive the directory name from sanitized native IDs.
 4. Write an ownership marker beside the future worktree containing Symphony UUID,
-   repository, PR native ID, exact PR head SHA, and review action identity.
+   repository, PR native ID, exact PR head SHA, and review action identity. Add a
+   cleanup-ledger entry with attachment state `reserved-unattached`.
 5. Canonicalize root and child paths and verify component-level containment.
-6. Add a detached Git worktree at the exact PR head SHA.
+6. Add a detached Git worktree at the exact PR head SHA, then atomically change
+   the ledger attachment state to `attached-worktree`.
 7. Verify `HEAD` equals the requested SHA and tracked and staged state is clean.
 
 Parallel command-running reviewers receive separate owned worktrees. A reviewer
 that only needs the diff and supplied context receives no worktree.
 
 Maintain an explicit cleanup ledger in memory containing repository, canonical
-worktree path, canonical review directory, marker contents, and attachment state
-for every created directory.
+worktree path, canonical review directory, marker contents, expected action
+identity, and attachment state for every created directory.
 
 ## Run contained validation commands
 
@@ -233,14 +235,20 @@ For each cleanup-ledger entry:
 
 1. Canonicalize paths again.
 2. Verify component-level containment beneath the dedicated root.
-3. Read and match the ownership marker.
-4. Confirm Git worktree metadata matches repository and path.
-5. Remove the expected worktree through Git.
-6. Remove only the now-owned review directory and transient artifacts.
+3. Read and match the ownership marker and expected action identity.
+4. Branch on the explicit attachment state:
+   - For `attached-worktree`, confirm Git worktree metadata matches the expected repository and canonical path. Remove the expected worktree through Git,
+     then remove only expected owned transient artifacts.
+   - For `reserved-unattached`, freshly prove attachment state is false and prove
+     no repository/worktree metadata, checkout, unexpected file, or unexpected
+     contents exists. Remove only the known empty reservation and marker artifacts
+     without requiring Git worktree metadata.
 
-Never remove an unmarked, mismatched, or user-created worktree. Journal a
-`cleanup-failed` event once and return the exact owned path for retry when safe
-cleanup cannot complete.
+Marker mismatch, unexpected contents, ambiguous attachment, containment failure,
+or Git metadata mismatch never permits deletion. Journal a `cleanup-failed`
+event once, retain the exact owned path, and retry only after a new safe observation.
+
+Apply this attachment-state branch on success, failure, timeout, stale head, reviewer error, and publication failure.
 
 append event `cleanup-failed`
 

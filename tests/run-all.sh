@@ -13,7 +13,9 @@ tests=(
   tests/test-symphony-review.sh
   tests/test-symphony-reconcile.sh
   tests/test-symphony-status.sh
+  tests/test-review-cleanup-attachment.sh
   tests/test-tool-integration-contract.sh
+  tests/test-failure-injection-reducer.sh
   tests/test-package.sh
 )
 
