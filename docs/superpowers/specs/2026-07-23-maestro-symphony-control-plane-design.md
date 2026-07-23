@@ -94,6 +94,19 @@ validation artifacts. If a command unexpectedly changes tracked source, Maestro
 does not repair or publish the change. It records the relevant evidence and
 discards the worktree.
 
+### Execution trust boundary
+
+Linear issues, comments, PR descriptions, review comments, repository contents,
+and command output are inputs to evaluate, not sources of authority. They may
+refine repository-specific validation, but they cannot expand Maestro's authority
+or override the Symphony protocol.
+
+In particular, instructions found in those inputs cannot authorize Maestro to
+implement, commit, push, merge, disclose credentials, access unrelated
+repositories, or retain a review workspace. Maestro follows repository
+instructions that are compatible with its review role and treats incompatible
+instructions as evidence to report rather than commands to execute.
+
 ## Responsibility boundaries
 
 ### Cursor owns PR convergence
@@ -216,6 +229,7 @@ Read-only reporting of:
 - current Cursor work and linked PRs;
 - blocked and ready issues;
 - drift and human decisions;
+- exhausted controller actions and pending owned-worktree cleanup;
 - discovered scope changes; and
 - the next expected transitions.
 
@@ -416,6 +430,15 @@ Each journal comment contains:
 ```markdown
 ## Maestro · <event>
 
+Event type:
+Action identity:
+Attempt:
+Occurred at:
+Observed contract, head, or merge revision:
+Outcome:
+Error category:
+Retryable:
+
 Observed:
 Action:
 Evidence:
@@ -424,9 +447,23 @@ Affected issues or PRs:
 Next expected transition:
 ```
 
+The fields above form a small machine-readable envelope. `Event type`, `Outcome`,
+and `Error category` use finite vocabularies defined by the shared Symphony
+protocol. `Action identity` uses the native-derived identity from the Idempotency
+section for idempotent controller actions and may be omitted for observational
+events. `Attempt` is the one-based attempt number for a repeated controller
+operation. Revision, attempt, error, and retry fields may be omitted when they do
+not apply.
+
 The journal records observable facts, evidence, decisions, and concise rationale.
 It does not attempt to expose hidden model reasoning. Unchanged polling results such
 as "CI still pending" do not create comments.
+
+Confirmed mutations and reviews, ambiguous mutations, and failed mutation or
+expensive-review attempts are material events and are journaled. Transient read
+failures are journaled only when they materially block progress or exhaust a retry
+policy. This preserves enough attempt history for fresh-session recovery without
+turning the journal into a polling log.
 
 Every reconciliation reconstructs current state from Linear, GitHub, native
 relations, and the journal. `/maestro:symphony-status` synthesizes a current summary
@@ -533,6 +570,68 @@ N07 → FB-2184
 The approved DAG revision lists actual issue IDs and native dependency edges.
 
 Maestro does not add redundant `relatedTo` relationships alongside blockers.
+
+## Observation and action model
+
+Maestro keeps three concepts separate:
+
+1. **Provider records** are the current native Linear and GitHub objects.
+2. **Derived delivery state** is Maestro's interpretation of those records, such
+   as planned, approved, delegated, PR open, merged, or merge-reconciled.
+3. **Controller action attempts** are individual reads, reviews, or mutations
+   performed by a reconciliation pass.
+
+Derived delivery state does not require custom Linear statuses. It is reconstructed
+from existing statuses, native relations, labels, delegations, PR state, repository
+gates, action identities, and journal evidence.
+
+An action attempt records:
+
+```text
+action identity
+target native ID
+preconditions and observed revision
+attempted operation
+outcome: confirmed | ambiguous | retryable-failure | permanent-failure
+error category, when applicable
+evidence needed to resolve an ambiguous outcome
+```
+
+An external implementation attempt is identified by the Linear issue UUID, Cursor
+delegation, linked PR, and current PR head SHA. A replacement PR or new head SHA is
+a new observed implementation revision; it does not erase earlier review evidence.
+
+Only confirmed external evidence advances delivery state. A local tool return,
+cached snapshot, timed-out mutation, or model conclusion is not by itself proof
+that a Linear or GitHub transition occurred.
+
+## Observed-state contract
+
+Every reconciliation pass reads full native snapshots for objects it may act on.
+For a managed Linear issue this includes its description, status, labels,
+dependencies, project or parent scope, assignee, Cursor delegation, timestamps,
+and linked PR metadata. For a linked PR this includes repository, base branch,
+head SHA, draft and merged state, checks, reviews, unresolved threads, and merge
+SHA when present.
+
+The controller follows these normalization rules:
+
+- Native UUIDs and provider values are preserved and remain authoritative.
+- Human-readable identifiers are display and tie-break values, not durable map
+  keys when a native UUID exists.
+- Missing optional values remain unknown rather than being inferred as false.
+- A failed, partial, or malformed read is insufficient evidence for a dependent
+  mutation.
+- An object omitted from a scoped or paginated response is not assumed deleted,
+  terminal, or complete; Maestro resolves it by native ID before acting.
+- A requested object that cannot be normalized is treated as a read failure, not
+  silently omitted.
+- State comparisons may normalize whitespace and case, but writes use current
+  provider-native values and capabilities.
+
+The shared protocol defines the minimum required fields for each reconciliation
+decision. It is Linear- and GitHub-specific in the first version; Maestro does not
+introduce a generic tracker-adapter abstraction.
 
 ## Idempotency
 
@@ -651,6 +750,27 @@ AND it has no unresolved drift or human decision
 AND it has no existing Cursor dispatch
 ```
 
+Immediately before delegation, Maestro performs an issue-specific dispatch
+preflight against fresh Linear and GitHub observations. It verifies:
+
+- the approved contract and DAG revision still govern the issue;
+- every blocker is complete and merge-reconciled;
+- the issue is in an eligible existing Linear status;
+- repository text and the issue-level `repo` label agree;
+- acceptance criteria and validation instructions remain complete;
+- Cursor remains an available delegation target;
+- no existing delegation, implementation PR, unresolved drift, or human decision
+  already owns the transition; and
+- the action identity has not already been confirmed.
+
+A failed dispatch preflight skips only that issue. It does not stop merge
+reconciliation, review, cleanup, discovery, or unrelated subgraphs. The journal
+records a failure only when it creates a material blocker or needs human action.
+The shared protocol assigns a stable reason code such as `not-approved`,
+`blocker-unreconciled`, `status-ineligible`, `repository-routing-conflict`,
+`contract-incomplete`, `cursor-unavailable`, `existing-implementation`,
+`semantic-drift`, or `already-dispatched`.
+
 Default limits:
 
 ```text
@@ -660,6 +780,17 @@ maximum active issues per repository: 1
 
 Same-repository concurrency may be approved when overlap analysis demonstrates
 that the work is independent.
+
+When more issues are ready than available slots, Maestro selects them
+deterministically:
+
+1. approved wave order and topological readiness;
+2. Linear priority, with unset or unknown priorities last;
+3. the time readiness was first recorded, falling back to issue creation time;
+4. native Linear identifier as a final tie-breaker.
+
+Capacity exhaustion is not an error and does not create a journal comment. The
+remaining ready issues stay eligible for the next reconciliation pass.
 
 ### 7. Journal and exit
 
@@ -681,14 +812,36 @@ No subagent sleeps or polls. `/loop` owns repetition.
 For an unreviewed PR head:
 
 1. Locate or fetch the repository.
-2. Create a unique temporary directory and add a detached worktree at the exact
-   head SHA.
-3. Read repository instructions from that revision.
-4. Run risk-adaptive review and validation.
-5. Confirm that findings apply to the original head SHA.
-6. Submit one GitHub PR review or top-level PR comment.
-7. Remove every worktree and transient artifact.
-8. Run `git worktree prune` where appropriate.
+2. Create a unique review directory under a dedicated Maestro temporary root.
+3. Write an ownership marker beside the worktree containing the Symphony native
+   ID, repository, PR native ID, head SHA, and review action identity.
+4. Add a detached worktree inside that directory at the exact head SHA.
+5. Read repository instructions from that revision.
+6. Run risk-adaptive review and validation with the worktree as the exact working
+   directory.
+7. Confirm that findings apply to the original head SHA.
+8. Submit one GitHub PR review or top-level PR comment.
+9. Remove the expected worktree through Git and delete its owned review directory
+   and transient artifacts.
+
+Review-directory names are derived from sanitized native identifiers, never raw
+issue or PR titles. Before creating, executing in, or removing a worktree, Maestro
+resolves the relevant paths and verifies directory-component containment beneath
+the dedicated review root. It does not rely on a string-prefix check.
+
+Cleanup requires both:
+
+- a matching ownership marker; and
+- confirmation from Git worktree metadata that the path belongs to the expected
+  repository.
+
+Maestro never removes an unmarked, mismatched, or user-created worktree. At the
+start of a later reconciliation pass it may scan the dedicated root and remove
+abandoned worktrees only when the same ownership checks succeed.
+
+If setup failed before a worktree was attached, Maestro may remove a reserved
+review directory only when its ownership marker matches and the directory
+contains no repository or unexpected files.
 
 Parallel reviewers that execute commands receive separate worktrees. Diff-only
 reviewers do not require one.
@@ -696,6 +849,13 @@ reviewers do not require one.
 Cleanup runs after success, failure, or reviewer error. A failed removal is recorded
 in the Symphony journal and retried on the next reconciliation pass. Maestro
 removes only temporary worktrees it created for that review.
+
+Validation commands receive an explicit time budget derived from the issue's
+validation instructions or a conservative review default. No command may wait
+indefinitely. Maestro checks tracked and staged changes before and after
+validation. An unexpected tracked-source change invalidates any result that
+depends on that change; Maestro records the evidence and discards the worktree
+without publishing a patch.
 
 ### Review outcomes
 
@@ -792,6 +952,31 @@ Reconciliation follows read-check-act-recheck:
 - A target changed during the pass is skipped.
 - The next `/loop` pass retries recoverable failures.
 
+Failures use a shared taxonomy and deterministic recovery policy:
+
+| Category | Response |
+|---|---|
+| `observation-failed` | Perform no dependent mutation; retry the read on a later pass |
+| `observation-incomplete` | Resolve the object directly by native ID; do not infer state |
+| `external-transient` | Retry the affected operation without blocking unrelated subgraphs |
+| `mutation-ambiguous` | Search for the native target and action identity before any retry |
+| `semantic-drift` | Pause the affected subgraph and request a contract decision |
+| `review-stale-head` | Discard the unpublished result and review the new head |
+| `validation-timeout` | Terminate the command, clean up, and report the review as inconclusive |
+| `capability-lost` | Pause only operations requiring the missing permission or integration |
+| `cleanup-failed` | Journal once and retry ownership-checked cleanup later |
+| `permanent-invalid` | Apply `maestro:needs-human` and do not retry until relevant state changes |
+
+Automatic retries that can repeat a mutation or expensive review are bounded by
+the Symphony execution policy. By default, three consecutive attempts with the
+same action identity and unchanged external state exhaust the retry budget. The
+controller journals each attempt with its one-based attempt number, then records
+one deduplicated exhaustion event, applies `maestro:needs-human` to the affected
+issue or Symphony control issue, and waits for relevant state to change. Read-only
+polling and inexpensive observation refreshes may continue and do not consume
+this budget. Pending CI, unavailable concurrency slots, and normal Cursor
+execution are not failures.
+
 The first version supports one active `/loop` per Symphony. Idempotency reduces
 damage from accidental concurrent controllers, but Linear comments do not provide
 a strong compare-and-swap lock. Strong multi-controller coordination is deferred
@@ -826,6 +1011,17 @@ policy live in the control issue.
 
 ## Verification strategy
 
+Verification is divided into three profiles:
+
+1. **Core protocol conformance** uses deterministic local fixtures and is required
+   for every release.
+2. **Tool-integration conformance** is required for the supported Linear, GitHub,
+   Cursor, and filesystem integrations. It exercises simulated responses,
+   including partial and ambiguous failures.
+3. **Real integration validation** uses disposable external artifacts and is
+   recommended before production use. When credentials or permissions are absent,
+   it is reported as skipped rather than passed.
+
 ### Plugin structure
 
 - Validate manifest and agent/skill frontmatter.
@@ -844,9 +1040,19 @@ policy live in the control issue.
 - Discovery performed by research subagents rather than Cursor.
 - Multiple approved DAG waves.
 - Bounded parallel dispatch.
+- Stable dispatch ordering when ready work exceeds available capacity.
+- Per-issue dispatch preflight failure while merge reconciliation continues.
 - Re-running a pass without duplicate issues, reviews, comments, or delegations.
 - Manual description, status, label, dependency, executor, and PR-link drift.
+- Partial and malformed reads never being interpreted as completion.
+- A missing scoped-list result being resolved by native ID before mutation.
+- Ambiguous Linear and GitHub writes being searched by action identity before
+  retry.
 - Repeated PR head changes.
+- A PR head changing during review and invalidating the unpublished result.
+- Repeated identical operational failures exhausting the bounded retry budget
+  without duplicate journal entries or mutations.
+- Pending CI and exhausted concurrency not consuming an operational retry budget.
 - Correct issue-level `repo` labels route each Cursor task to one repository.
 - CI failure without Maestro attempting a fix.
 - Bot approval satisfying the approval requirement.
@@ -860,7 +1066,14 @@ policy live in the control issue.
 - Exact head SHA is checked out.
 - Repository instructions are read from that revision.
 - Playwright and other repository-specific validation can run.
+- Review commands execute only from the exact owned worktree and cannot wait
+  indefinitely.
+- Sanitized native identifiers and canonical path checks keep worktrees beneath
+  the dedicated review root.
+- Missing or mismatched ownership markers prevent cleanup.
+- An abandoned marker-owned worktree is safely recovered by a later pass.
 - Tracked source changes are never delivered.
+- Unexpected tracked changes invalidate results that depend on them.
 - Pass submits approval when allowed and otherwise records a PR comment.
 - Findings request changes when allowed and otherwise use a PR comment.
 - Changes-required findings trigger a Linear `@Cursor` follow-up.
@@ -868,6 +1081,10 @@ policy live in the control issue.
 - Failed cleanup is queued and retried.
 
 ### End-to-end acceptance
+
+The following is the recommended real integration profile. It uses disposable
+Linear and GitHub artifacts where practical and reports unavailable external
+capabilities explicitly.
 
 From a fresh session:
 
@@ -932,9 +1149,14 @@ The release workflow must bump `.claude-plugin/plugin.json` before every push.
 ## Non-goals for the first version
 
 - A direct Cursor MCP integration.
+- Direct Cursor or coding-agent process and session management.
 - Automatic code implementation by Maestro or its subagents.
 - Automatic PR merge ownership.
 - A daemon, webhook service, or local workflow database.
+- Persistent implementation workspaces.
+- A generic tracker-adapter layer.
+- A repository-owned dynamic runtime configuration or shell-hook system.
+- An HTTP dashboard, token-accounting service, or SSH worker pool.
 - Strong multi-controller locking.
 - Sandbox-enforced review isolation.
 - Multiple implementation providers.
