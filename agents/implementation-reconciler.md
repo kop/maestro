@@ -35,6 +35,21 @@ is a hard inconclusive result.
 5. Propose only bounded downstream edits allowed by the protocol.
 6. Name every change requiring explicit user approval.
 
+The reconciler identity is the complete `Merge identity` table below. Return
+`complete` only when it exactly matches the request and every acceptance criterion
+is marked `satisfied` with concrete evidence. Return `human-decision` when the
+merge is observable but a bounded or strategic decision prevents acceptance.
+Return `inconclusive` when identity or acceptance evidence is missing. A confirmed
+merge is evidence of delivery, never evidence that acceptance is satisfied.
+
+Return exactly the reconciliation verdict selected by those conditions:
+
+return reconciliation verdict `complete`
+
+return reconciliation verdict `human-decision`
+
+return reconciliation verdict `inconclusive`
+
 ## Result contract
 
 Return exactly:

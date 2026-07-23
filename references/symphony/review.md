@@ -70,6 +70,20 @@ actually provisioned.
 
 Reviewers return findings only; they never edit.
 
+### Risk-label mapping
+
+Risk labels are deterministic roster selectors, not advisory decorations:
+
+| Label | Required review behavior |
+|---|---|
+| `maestro-risk-security` | Select the security lens in addition to contextual review |
+| `maestro-risk-infra` | Select code review plus available rendered infrastructure/workflow validators and runtime-toolchain checks |
+| `maestro-risk-migration` | Select contextual + code + test lenses and require migration/rollback/compatibility evidence |
+
+For `maestro-risk-migration`, add security only when a trust boundary also requires
+security review. File and context inference may add lenses but must not remove a
+label-selected lens.
+
 ## Common finding contract
 
 Every reviewer returns:
@@ -119,10 +133,11 @@ review the new SHA on a later pass.
   one top-level PR comment recording the passed Symphony review.
 - Changes required: submit request-changes when permitted; otherwise post one
   consolidated top-level PR comment.
-- Human decision: post a non-approving review/comment and apply
-  `maestro:needs-human`.
+- Human decision: post a non-approving review/comment, record prior/resume phase,
+  and apply `maestro:scope-change` for a strategic contract/DAG revision or
+  `maestro:needs-human` for a bounded decision.
 - Inconclusive: post only when the missing evidence itself requires action;
-  otherwise journal the failed attempt and retry within policy.
+  otherwise append `action-failed` and retry within policy.
 
 For changes required, add one Linear issue comment after the canonical GitHub
 record:

@@ -61,6 +61,51 @@ read blocks only dependent actions.
 Inspect `${TMPDIR:-/tmp}/maestro-symphony-reviews` for cleanup debt. Attempt cleanup
 only through the ownership checks in the review protocol.
 
+Consume every journal event while reconstructing history, then require the fresh
+provider evidence named by its transition:
+
+consume event `symphony-started`
+
+consume event `discovery-recorded`
+
+consume event `discovery-completed`
+
+consume event `dag-proposed`
+
+consume event `dag-approved`
+
+consume event `dag-node-bound`
+
+consume event `dag-edge-bound`
+
+consume event `dag-materialized`
+
+consume event `semantic-drift-detected`
+
+consume event `issue-dispatched`
+
+consume event `review-recorded`
+
+consume event `review-stale-head`
+
+consume event `merge-observed`
+
+consume event `merge-reconciled`
+
+consume event `human-decision-required`
+
+consume event `follow-up-created`
+
+consume event `issue-cancelled`
+
+consume event `action-failed`
+
+consume event `retry-exhausted`
+
+consume event `cleanup-failed`
+
+consume event `symphony-completed`
+
 ## 2. Detect drift
 
 Compare every approved issue contract and native dependency set with current
@@ -69,9 +114,13 @@ Linear. Apply the reconciliation protocol's drift table.
 Repair only generated, mechanically derivable metadata. For semantic drift:
 
 1. pause only the affected subgraph;
-2. apply `maestro:needs-human`;
-3. append one deduplicated event with the exact contract or edge diff;
+2. apply `maestro:needs-human` for a bounded decision/capability pause or
+   `maestro:scope-change` when a strategic contract/DAG revision is required;
+3. append one deduplicated `semantic-drift-detected` event with the exact contract
+   or edge diff and prior/resume phase;
 4. do not repeatedly restore the old value.
+
+append event `semantic-drift-detected`
 
 GitHub merge evidence is authoritative over lagging Linear automation. Done without
 a merge-reconciliation identity never unlocks dependants.
@@ -80,21 +129,49 @@ a merge-reconciliation identity never unlocks dependants.
 
 For every merged PR lacking a confirmed merge action identity:
 
-1. Re-read the final PR and merge SHA.
+1. Re-read the final PR and merge SHA. Append or recover `merge-observed` so the
+   confirmed GitHub merge is never forgotten while merged remains distinct from
+   merge-reconciled.
 2. Obtain the final diff and relevant repository evidence.
 3. Dispatch `maestro:implementation-reconciler` with the complete reconciliation
    envelope.
-4. Validate the returned merge identity and evidence.
-5. Append `Actual implementation`, `Deviations and decisions`, and `Follow-up
-   work` without replacing the original issue contract.
-6. Apply only allowed bounded edits to undispatched downstream context, proposed
-   approach, validation, and dependency notes.
-7. Create proposed follow-up issues idempotently when required.
-8. Pause and request approval for objective, scope, acceptance, strategic DAG, or
-   running-work changes.
-9. Confirm the merge action identity externally, then move the issue to the
-   appropriate existing completed status and apply `maestro:complete`.
-10. Recalculate downstream readiness.
+4. Validate the reconciler identity against the requested PR, issue UUID, merge
+   SHA, contract revision, and DAG revision. Validate its declared verdict and
+   acceptance-evidence table.
+5. Only verdict `complete`, with every acceptance criterion satisfied and
+   evidenced, may append `Actual implementation`, `Deviations and decisions`, and
+   `Follow-up work`; apply bounded downstream edits; create and confirm required
+   follow-ups with `follow-up-created`; record `merge-reconciled`; move the issue
+   to an unambiguous native completed status; apply `maestro:complete` to that
+   implementation issue; or unlock dependants. This implementation transition
+   never implies completion of the control issue or Symphony.
+6. For `human-decision`, journal `merge-observed` and
+   `human-decision-required` with decision evidence and prior/resume phase. Apply
+   `maestro:scope-change` for strategic contract/DAG revision or
+   `maestro:needs-human` for a bounded decision; leave the issue unreconciled and
+   keep all downstream blockers locked.
+7. For `inconclusive`, journal `merge-observed` and `action-failed` with the
+   missing evidence and finite failure category, then follow bounded retry policy;
+   leave the issue unreconciled and keep all downstream blockers locked.
+8. Recalculate downstream readiness only after confirmed `merge-reconciled`.
+
+append event `merge-observed`
+
+append event `merge-reconciled`
+
+append event `human-decision-required`
+
+append event `follow-up-created`
+
+append event `action-failed`
+
+Consume the reconciler result according to its exact returned value:
+
+consume reconciliation verdict `complete`
+
+consume reconciliation verdict `human-decision`
+
+consume reconciliation verdict `inconclusive`
 
 An ambiguous write is searched by native target/action identity before retry.
 
@@ -110,6 +187,16 @@ For each relevant current PR head without a confirmed review identity:
    record and Linear `@Cursor` follow-up.
 6. If human judgment is required, pause only the affected subgraph.
 
+Consume the review result according to its exact returned value:
+
+consume review verdict `pass`
+
+consume review verdict `changes-required`
+
+consume review verdict `human-decision`
+
+consume review verdict `inconclusive`
+
 Maestro does not triage other reviewers' comments and does not diagnose ordinary
 CI failures. Cursor owns all PR convergence.
 
@@ -123,13 +210,39 @@ current head.
 For approved outstanding discovery:
 
 - dispatch `maestro:symphony-researcher` with bounded parallelism;
-- write returned evidence to the matching discovery issue;
+- create any approved discovery issue with `maestro-managed` and
+  `maestro:discovery`;
+- write returned evidence to the matching discovery issue and append
+  `discovery-recorded`;
+- when its result and confidence/remaining-unknowns contract is complete, append
+  `discovery-completed`, then apply `maestro:complete` to that discovery issue
+  only;
 - use `maestro:code-architect` for cross-repository synthesis;
 - propose a new versioned DAG wave only when evidence is sufficient.
 
-Every material DAG revision requires explicit user approval. A `/loop` pass may
-prepare and journal the proposal, apply `maestro:needs-human`, and report it; it
-must not self-approve or dispatch that revision.
+Every material DAG revision requires explicit user approval. A `/loop` pass must
+append and confirm the complete `dag-proposed` event before requesting approval.
+It applies the appropriate pause phase and reports the proposal; it must not
+self-approve or dispatch that revision. A later explicit approval must be
+recorded as `dag-approved` for the exact proposal/contract identity before
+materialization resumes. Follow the durable node/edge binding protocol in the
+Linear reference and append `dag-materialized` only after all native objects are
+confirmed. Append each required `dag-node-bound` and `dag-edge-bound` during that
+recovery/materialization sequence.
+
+append event `discovery-recorded`
+
+append event `discovery-completed`
+
+append event `dag-proposed`
+
+append event `dag-approved`
+
+append event `dag-node-bound`
+
+append event `dag-edge-bound`
+
+append event `dag-materialized`
 
 ## 6. Dispatch ready implementation issues
 
@@ -159,18 +272,62 @@ For each available slot:
 6. Apply `maestro:executing`.
 7. Append one `issue-dispatched` journal event with the native action identity.
 
+append event `issue-dispatched`
+
 If delegation is ambiguous, search for the existing Cursor delegation before
 retrying. Capacity exhaustion is not a failure and creates no event.
 
-## 7. Journal and exit
+## Approved implementation cancellation
+
+An implementation issue may be cancelled only after explicit approval identifies
+its native UUID, governing contract/DAG revision, cancellation rationale, and
+downstream dependency disposition. Confirm the native cancellation, append
+`issue-cancelled`, and apply `maestro:complete` to that implementation issue only.
+Do not unlock a dependant unless the approved revised DAG removes the cancelled
+contract or names its replacement. Cancellation never implies completion of the
+control issue or Symphony.
+
+append event `issue-cancelled`
+
+## 7. Evaluate Symphony closeout
+
+Do not infer closeout from terminal implementation issues. Evaluate the complete
+Symphony closeout contract from the Linear and reconciliation references:
+
+- the final integration/outcome-verification issue succeeded with evidence;
+- all approved required work is completed or explicitly cancelled with rationale;
+- all merged PRs are merge-reconciled;
+- no required managed PR or delegation remains active;
+- no unresolved semantic drift, human decision, ambiguous mutation, retry
+  exhaustion, or owned-worktree cleanup debt remains; and
+- every required follow-up issue exists.
+
+If any gate is false or unknown, retain the current phase and report it. Merely
+observing terminal implementation issues must not close the Symphony.
+
+When all gates are freshly confirmed, append the control issue's
+`Final as-built outcome`. Link final integration evidence and record final
+approved/reconciled scope plus material deviations/follow-ups. Confirm the update,
+append exactly one `symphony-completed` event, then apply and confirm
+`maestro:complete` on the control issue only.
+
+append event `symphony-completed`
+
+## 8. Journal and exit
 
 Append only material events from the pass. Re-read each target before mutation and
 confirm external outcomes afterward.
 
 Mutations and expensive reviews use the failure taxonomy and a default maximum of
 three consecutive attempts with the same action identity and unchanged state.
-After three consecutive attempts, record one exhaustion event, apply
+After three consecutive attempts, append one `retry-exhausted` event, apply
 `maestro:needs-human`, and wait for relevant state change.
+
+append event `retry-exhausted`
+
+If ownership-checked cleanup cannot complete, preserve its debt and execute:
+
+append event `cleanup-failed`
 
 End quietly unless:
 
@@ -186,3 +343,96 @@ Otherwise return only a terse pass summary for `/loop`:
 ```text
 reconciled=<count> reviewed=<count> dispatched=<count> material_events=<count>
 ```
+
+Apply only the label transition selected by the entity-scoped rules above:
+
+apply label `maestro-managed`
+
+apply label `maestro:discovery`
+
+apply label `maestro:planning`
+
+apply label `maestro:executing`
+
+apply label `maestro:needs-human`
+
+apply label `maestro:scope-change`
+
+apply label `maestro:complete`
+
+apply label `maestro-risk-security`
+
+apply label `maestro-risk-infra`
+
+apply label `maestro-risk-migration`
+
+## Classify reconciliation attempts
+
+Every provider read, review, or mutation attempt emits exactly one outcome and
+consumes it to select the transition:
+
+emit outcome `confirmed`
+
+consume outcome `confirmed`
+
+emit outcome `ambiguous`
+
+consume outcome `ambiguous`
+
+emit outcome `retryable-failure`
+
+consume outcome `retryable-failure`
+
+emit outcome `permanent-failure`
+
+consume outcome `permanent-failure`
+
+When the outcome requires a category, emit an applicable locally produced
+category. Consume every category returned by this pass or by `symphony-review`,
+using the adjacent retryability rule:
+
+emit failure category `observation-failed`
+
+consume failure category `observation-failed`
+Retryability: Retry the read later; authorize no dependent mutation
+
+emit failure category `observation-incomplete`
+
+consume failure category `observation-incomplete`
+Retryability: Resolve directly by native ID before retrying the dependent action
+
+emit failure category `external-transient`
+
+consume failure category `external-transient`
+Retryability: Retry the affected operation while unrelated work continues
+
+emit failure category `mutation-ambiguous`
+
+consume failure category `mutation-ambiguous`
+Retryability: Search by native target and action identity before any retry
+
+emit failure category `semantic-drift`
+
+consume failure category `semantic-drift`
+Retryability: Do not retry mutation; require bounded decision or strategic revision
+
+consume failure category `review-stale-head`
+Retryability: Do not retry the stale identity; create a new identity for the new head
+
+consume failure category `validation-timeout`
+Retryability: Terminate, clean up, and retry only within the unchanged-state budget
+
+emit failure category `capability-lost`
+
+consume failure category `capability-lost`
+Retryability: Pause dependent operations until capability changes
+
+emit failure category `cleanup-failed`
+
+consume failure category `cleanup-failed`
+Retryability: Retry only ownership-checked cleanup; blocks Symphony closeout
+
+emit failure category `permanent-invalid`
+
+consume failure category `permanent-invalid`
+Retryability: Do not retry unchanged state; require human correction

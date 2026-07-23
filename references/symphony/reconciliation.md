@@ -11,7 +11,8 @@ It never sleeps or polls; `/loop` owns repetition.
 4. Review every unreviewed relevant PR head.
 5. Continue approved discovery and propose planning revisions.
 6. Dispatch ready implementation issues.
-7. Append material journal events and exit.
+7. Evaluate Symphony closeout.
+8. Append material journal events and exit.
 
 A failure in one repository or subgraph does not halt unrelated work.
 
@@ -30,9 +31,11 @@ Linear is shared state; human and automation edits are expected.
 | Linked PR changed, closed, or replaced | Resolve the implementation source |
 | GitHub merged state disagrees with Linear | Trust merge evidence and reconcile Linear |
 
-Semantic drift produces one deduplicated report and `maestro:needs-human`. Never
-repeatedly fight a human edit. Repair only generated or mechanically derivable
-metadata.
+Semantic drift produces one deduplicated `semantic-drift-detected` report.
+Bounded decision/capability drift uses `maestro:needs-human`; drift requiring a
+strategic contract or DAG revision uses `maestro:scope-change`. Record the
+prior/resume phase and never repeatedly fight a human edit. Repair only generated
+or mechanically derivable metadata.
 
 ## Dispatch readiness
 
@@ -101,22 +104,85 @@ remaining configured gates satisfied. Maestro does not merge.
 
 ## Post-merge reconciliation
 
-Merged does not mean Done. For each new merge:
+The state merged remains distinct from merge-reconciled and does not mean Done.
+For each new merge, first append `merge-observed` so the confirmed GitHub merge is
+never forgotten. Then:
 
 1. Inspect the final PR, diff, and merge SHA.
 2. Run `implementation-reconciler`.
-3. Append `Actual implementation`, deviations, and acceptance evidence.
-4. Apply bounded updates to undispatched downstream context, proposed approach,
-   validation, and dependency notes.
-5. Propose follow-up issues for discovered work.
-6. Request approval for objective, scope, acceptance-criteria, strategic DAG, or
-   running-work changes.
-7. Record the merge action identity.
-8. Mark complete and recalculate readiness.
+3. Validate the reconciler identity against the implementation issue UUID,
+   contract revision, approved DAG revision, PR, and merge SHA; validate its
+   verdict and complete acceptance-evidence table.
+4. Follow the verdict transition below.
 
-Local deviations are recorded. Contract deviations update affected undispatched
-work. Scope discoveries propose follow-up work. Strategic deviations pause the
-affected subgraph.
+Only verdict `complete`, with every acceptance criterion satisfied and evidenced,
+may append `Actual implementation`, confirmed deviations and acceptance evidence,
+apply bounded downstream updates, confirm required follow-up issues, record the
+merge-reconciliation action identity as `merge-reconciled`, move the issue to an
+unambiguous existing native completed status, apply its completion phase, or
+unlock dependants.
+
+For `human-decision`, append the observed merge and `human-decision-required`
+with the decision evidence, affected subgraph, and prior/resume phase. Use
+`maestro:scope-change` for a strategic contract/DAG revision and
+`maestro:needs-human` for a bounded decision. Leave the issue unreconciled and
+keep all downstream blockers locked.
+
+For `inconclusive`, append the observed merge and `action-failed` with the missing
+evidence and applicable finite failure category. Follow bounded retry policy,
+leave the issue unreconciled, and keep all downstream blockers locked. A confirmed
+GitHub merge is never forgotten: later passes consume `merge-observed` and retry
+the same reconcile identity without treating it as merge-reconciled.
+
+Local deviations are recorded after a `complete` verdict. Contract deviations
+update affected undispatched work. Scope discoveries create required follow-up
+issues idempotently. Strategic deviations pause the affected subgraph before any
+completion transition.
+
+## Entity-scoped managed issue completion
+
+Interpret every mutually exclusive phase label with the native entity type:
+
+- A discovery issue remains `maestro:discovery` while evidence is incomplete.
+  After its result and confidence/remaining-unknowns contract is durably recorded
+  in `discovery-recorded`, append `discovery-completed` and apply
+  `maestro:complete` to only that discovery issue.
+- An implementation issue enters `maestro:complete` only after evidenced
+  `merge-reconciled`, or after `issue-cancelled` records explicit approval,
+  rationale, and the approved DAG's downstream dependency disposition. An
+  implementation issue completion never implies Symphony completion.
+- The control issue enters `maestro:complete` only through the evidenced Symphony
+  closeout and confirmed `symphony-completed` transition below.
+
+For `maestro:needs-human` or `maestro:scope-change`, record the entity type and its
+prior/resume phase. Resuming one managed issue does not resume another. An
+approved cancellation unlocks no dependant unless the approved revised DAG removes
+the cancelled consumed contract or names its replacement.
+
+## Symphony closeout
+
+Evaluate closeout only after merge reconciliation. A Symphony may close only when:
+
+```text
+final integration/outcome-verification issue succeeded with evidence
+AND all approved required work is completed or explicitly cancelled with rationale
+AND all merged PRs are merge-reconciled
+AND no required managed PR or delegation remains active
+AND no unresolved semantic drift, human decision, ambiguous mutation,
+    retry exhaustion, or owned-worktree cleanup debt remains
+AND every required follow-up issue exists
+```
+
+If any condition is false or unknown, retain the current non-complete phase and
+report the exact gate. Merely counting terminal implementation issues must not
+close the Symphony.
+
+When every condition is freshly confirmed, update the control issue's
+`Final as-built outcome`. Link final integration evidence and record the final
+approved/reconciled scope plus material deviations and follow-ups. Confirm that
+write, append exactly one `symphony-completed` event using its stable closeout
+identity, then apply `maestro:complete` to the control issue and confirm the label
+transition.
 
 ## Failure taxonomy and bounded recovery
 
@@ -135,7 +201,7 @@ affected subgraph.
 
 Mutations and expensive reviews default to three consecutive attempts with the
 same action identity and unchanged external state. Journal each attempt. After
-three consecutive attempts, record one exhaustion event, apply
+three consecutive attempts, append one `retry-exhausted` event, apply
 `maestro:needs-human` to the affected issue or control issue, and stop retrying
 until relevant state changes.
 

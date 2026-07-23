@@ -39,7 +39,10 @@ Start or resume a goal:
 `/maestro:symphony-start` accepts an epic, milestone, Linear project, broader goal, or existing Symphony issue. Planning is discovery-first: when the DAG cannot yet be known, Maestro research and architecture subagents gather evidence before proposing approved waves.
 
 Review the proposed issue contracts, dependencies, and execution waves. Maestro
-does not delegate implementation until you explicitly approve that DAG revision.
+durably records the complete proposal before asking, records approval of that
+exact revision before materialization, and resumes partial creation from fixed
+issue identities without duplication. It does not delegate implementation until
+you explicitly approve that DAG revision.
 
 Run one reconciliation pass:
 
@@ -90,6 +93,12 @@ PR review is risk-adaptive and exact-head: it always includes the mandatory Symp
 Repository policy owns merge readiness: zero failing checks, at least one approval
 from a human or bot, addressed review comments/threads, and every remaining
 configured gate.
+
+A Symphony closes only after its final integration/outcome-verification issue
+succeeds with evidence, every approved item is completed or explicitly cancelled,
+all merged PRs are merge-reconciled, active managed work and unresolved controller
+debt are clear, and required follow-ups exist. Terminal implementation issues
+alone are not completion.
 
 ## Linear conventions
 

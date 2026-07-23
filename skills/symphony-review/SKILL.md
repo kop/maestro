@@ -51,6 +51,21 @@ Add:
 - `maestro:comment-analyzer` when comments, public docs, schemas, or interface
   contracts materially changed.
 
+Label selection is mandatory:
+
+- `maestro-risk-security` selects `maestro:security-reviewer`.
+- `maestro-risk-infra` selects `maestro:code-reviewer` plus available rendered
+  infrastructure/workflow validators and runtime-toolchain checks.
+- `maestro-risk-migration` selects the contextual, code, and test lenses and
+  requires migration/rollback/compatibility evidence. Add the security lens only
+when a trust boundary also applies.
+
+read label `maestro-risk-security`
+
+read label `maestro-risk-infra`
+
+read label `maestro-risk-migration`
+
 Infrastructure changes require the code reviewer to validate rendered artifacts
 with available domain tools and inspect the CI runtime toolchain. Absence of a
 required validator is uncertainty, not a silent pass.
@@ -130,6 +145,16 @@ Aggregate:
 Missing required validation evidence or an unavailable required validator yields
 `inconclusive`; a confirmed product defect yields `changes-required`.
 
+Return exactly the verdict selected by those conditions:
+
+return review verdict `pass`
+
+return review verdict `changes-required`
+
+return review verdict `human-decision`
+
+return review verdict `inconclusive`
+
 Repository CI, review, and merge gates are not prerequisites for a Symphony
 review `pass`. That verdict means Maestro's exact-SHA contextual review passed;
 `symphony-reconcile` separately reconstructs repository merge readiness, while
@@ -145,7 +170,8 @@ differs from the exact PR head SHA:
 
 1. publish nothing;
 2. classify `review-stale-head`;
-3. journal the unpublished attempt only if it consumed an expensive retry;
+3. append `review-stale-head` only if the unpublished attempt consumed an
+   expensive retry;
 4. clean every worktree;
 5. return the new head to `symphony-reconcile`.
 
@@ -171,15 +197,32 @@ After the canonical GitHub record is confirmed, add one Linear comment mentionin
 `@Cursor`, with the exact reviewed SHA, review/comment link, and concise numbered
 required outcomes. This Linear comment is the implementation follow-up channel.
 
-For `human-decision`, publish a non-approving review/comment, apply
-`maestro:needs-human`, and do not mention `@Cursor` unless Cursor has a concrete
-implementation action.
+For `human-decision`, publish a non-approving review/comment and record the
+prior/resume phase. Apply `maestro:scope-change` for a strategic contract/DAG
+revision or `maestro:needs-human` for a bounded decision. Do not mention `@Cursor`
+unless Cursor has a concrete implementation action.
+
+apply label `maestro:scope-change`
+
+apply label `maestro:needs-human`
 
 For `inconclusive`, publish only when the missing evidence itself requires action.
-Otherwise journal the failed attempt and allow bounded retry.
+Otherwise append `action-failed` and allow bounded retry.
 
-Append one material review journal event with the action identity, attempt, exact
-SHA, outcome, evidence link, and next transition.
+Append one `review-recorded` event for a confirmed published `pass`,
+`changes-required`, or `human-decision` result, with the action identity, attempt,
+exact SHA, outcome, evidence link, and next transition. Also append
+`human-decision-required` for the latter. For an unpublished `inconclusive`
+attempt, append `action-failed` with its finite failure category. Use
+`review-stale-head` and `cleanup-failed` only as declared by the core vocabulary.
+
+append event `review-recorded`
+
+append event `review-stale-head`
+
+append event `human-decision-required`
+
+append event `action-failed`
 
 ## Cleanup guarantee
 
@@ -199,6 +242,8 @@ Never remove an unmarked, mismatched, or user-created worktree. Journal a
 `cleanup-failed` event once and return the exact owned path for retry when safe
 cleanup cannot complete.
 
+append event `cleanup-failed`
+
 Return to `symphony-reconcile`:
 
 ```markdown
@@ -212,3 +257,77 @@ Cleanup:
 Failure category:
 Next transition:
 ```
+
+## Classify review attempts
+
+Every review read, validation, publication, and cleanup attempt emits exactly one
+outcome and consumes it to choose the next transition:
+
+emit outcome `confirmed`
+
+consume outcome `confirmed`
+
+emit outcome `ambiguous`
+
+consume outcome `ambiguous`
+
+emit outcome `retryable-failure`
+
+consume outcome `retryable-failure`
+
+emit outcome `permanent-failure`
+
+consume outcome `permanent-failure`
+
+When the outcome requires a category, emit one applicable category and consume
+it with the adjacent retryability rule:
+
+emit failure category `observation-failed`
+
+consume failure category `observation-failed`
+Retryability: Retry the read later; authorize no dependent mutation
+
+emit failure category `observation-incomplete`
+
+consume failure category `observation-incomplete`
+Retryability: Resolve directly by native ID before retrying the dependent action
+
+emit failure category `external-transient`
+
+consume failure category `external-transient`
+Retryability: Retry the affected operation while unrelated work continues
+
+emit failure category `mutation-ambiguous`
+
+consume failure category `mutation-ambiguous`
+Retryability: Search by native target and action identity before any retry
+
+emit failure category `semantic-drift`
+
+consume failure category `semantic-drift`
+Retryability: Do not retry mutation; require bounded decision or strategic revision
+
+emit failure category `review-stale-head`
+
+consume failure category `review-stale-head`
+Retryability: Do not retry the stale identity; create a new identity for the new head
+
+emit failure category `validation-timeout`
+
+consume failure category `validation-timeout`
+Retryability: Terminate, clean up, and retry only within the unchanged-state budget
+
+emit failure category `capability-lost`
+
+consume failure category `capability-lost`
+Retryability: Pause dependent operations until capability changes
+
+emit failure category `cleanup-failed`
+
+consume failure category `cleanup-failed`
+Retryability: Retry only ownership-checked cleanup; blocks Symphony closeout
+
+emit failure category `permanent-invalid`
+
+consume failure category `permanent-invalid`
+Retryability: Do not retry unchanged state; require human correction
