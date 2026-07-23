@@ -105,8 +105,11 @@ remaining configured gates satisfied. Maestro does not merge.
 ## Post-merge reconciliation
 
 The state merged remains distinct from merge-reconciled and does not mean Done.
-For each new merge, first append `merge-observed` so the confirmed GitHub merge is
-never forgotten. Then:
+Select every merged PR whose source issue/merge SHA lacks a confirmed
+`merge-reconciled` result. If `merge-observed` is absent, append it so the
+confirmed GitHub merge is never forgotten; if it already exists, consume it and
+continue reconciliation. The observation event never suppresses the later
+reconciliation attempt. Then:
 
 1. Inspect the final PR, diff, and merge SHA.
 2. Run `implementation-reconciler`.
@@ -136,8 +139,10 @@ the same reconcile identity without treating it as merge-reconciled.
 
 Local deviations are recorded after a `complete` verdict. Contract deviations
 update affected undispatched work. Scope discoveries create required follow-up
-issues idempotently. Strategic deviations pause the affected subgraph before any
-completion transition.
+issues from the canonical `follow-up-v1:` key and complete identity in the Linear
+contract. Recompute and search the full identity before create or retry; one match
+is reused and multiple matches fail closed. Strategic deviations pause the
+affected subgraph before any completion transition.
 
 ## Entity-scoped managed issue completion
 
@@ -181,8 +186,9 @@ When every condition is freshly confirmed, update the control issue's
 `Final as-built outcome`. Link final integration evidence and record the final
 approved/reconciled scope plus material deviations and follow-ups. Confirm that
 write, append exactly one `symphony-completed` event using its stable closeout
-identity, then apply `maestro:complete` to the control issue and confirm the label
-transition.
+identity and canonical `evidence-v1:` revision, then apply `maestro:complete` to
+the control issue and confirm the label transition. Recompute and search the full
+closeout identity before mutation or retry; multiple matches fail closed.
 
 ## Failure taxonomy and bounded recovery
 

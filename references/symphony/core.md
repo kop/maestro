@@ -109,19 +109,38 @@ Control contract revision: `symphony-control-v1`
 | Create Linear `@Cursor` follow-up | Existing Review PR action identity + `linear-cursor-follow-up` channel |
 | Complete Symphony | Symphony UUID + final approved DAG revision + final integration issue UUID + evidence revision |
 
-Normalize a requested goal by Unicode NFC normalization, trimming leading and
-trailing whitespace, collapsing every internal whitespace run to one ASCII space,
-and case-folding. Serialize the control creation tuple as a whitespace-free JSON
-array whose first item is `maestro-control-create-v1`, followed by the native
-scope UUID and normalized goal, with literal `symphony-control-v1` as the fourth
-item; encode each item as an RFC 8259 JSON string. No agent or model selects or
-generates this revision. Embed the creation identity and control-contract revision
-in the initial control issue description as
+Canonical identity text uses Unicode NFC normalization, converts CRLF and CR to
+LF, trims leading and trailing Unicode whitespace, and collapses each internal
+run of code points with the Unicode `White_Space` property to one ASCII space for
+fields declared single-line. Case-fold only
+fields whose contract explicitly says to do so. Serialize every identity input as
+a whitespace-free RFC 8259 JSON array with that contract's fixed field order and
+JSON string escaping. Digest the serialized UTF-8 bytes with SHA-256 and encode the digest as lowercase hexadecimal. Native UUIDs and commit SHAs use their
+provider-canonical spelling. Ordered sets are deduplicated by exact canonical
+item and sorted lexicographically by the UTF-8 bytes of each whitespace-free JSON
+item before serialization.
+
+Normalize a requested goal with those text rules and case-folding. Serialize the
+control creation tuple as a whitespace-free JSON array whose first item is
+`maestro-control-create-v1`, followed by the native scope UUID and normalized
+goal, with literal `symphony-control-v1` as the fourth item. No agent or model
+selects or generates this revision. Embed the creation identity and
+control-contract revision in the initial control issue description as
 `Maestro-Control-Creation-Identity: <identity>` and
 `Maestro-Control-Contract-Revision: symphony-control-v1`. It must not use a
 random/model-generated identifier. Search the native target scope plus the
 embedded identity and literal revision before creating and after an ambiguous
 response; an exact title is never sufficient.
+
+Discovery, required-follow-up, and closeout identities are derived only from
+confirmed durable inputs recorded before their mutation. Discovery uses
+`discovery-v1:<digest>` and `question-v1:<digest>`; required follow-up uses
+`follow-up-v1:<digest>`; closeout evidence uses `evidence-v1:<digest>`. The
+family-specific canonical arrays are normative in the Linear contract. Before
+create, retry, or closeout mutation, recompute the full identity, search the
+exact native scope for it, reuse exactly one match, and fail closed when multiple
+matches exist. An ambiguous mutation starts the same search again from durable
+inputs; process memory or model wording is never identity authority.
 
 Embed each candidate's fixed creation identity in its initial issue description as
 `Maestro-DAG-Node-Creation-Identity: <identity>`. After an uncertain mutation,
@@ -219,6 +238,7 @@ without its real instruction is invalid.
 | Event type | Producer | Consumer and transition |
 |---|---|---|
 | `symphony-started` | `symphony-start` after confirmed control creation | Reconstructs the control identity and enters `maestro:discovery` |
+| `discovery-requested` | Start/reconcile after the canonical discovery revision and questions are durably recorded | Authorizes creation/recovery of only the recorded discovery identities |
 | `discovery-recorded` | Start/reconcile after confirmed discovery evidence | Persists evidence; discovery remains active until its result contract is complete |
 | `discovery-completed` | Start/reconcile after the discovery result and remaining unknowns are confirmed | Completes only that discovery issue and makes its evidence consumable by planning |
 | `dag-proposed` | Start/reconcile before requesting approval | Approval UI/session reconstructs the exact proposal; the control issue enters `maestro:planning` |
@@ -251,9 +271,10 @@ proposal is superseded or may be revised. It is appended before replanning. A
 rejected revision can never authorize materialization, and fresh sessions consume
 the event rather than rediscovering that revision as awaiting approval.
 
-`decision-resolved` contains the decision/pause action identity; one finite
+`decision-resolved` contains the exact decision/pause action identity; one finite
 disposition (`accept-observed-as-revision`, `restore-approved-state`,
-`revise-affected-wave`, or another value declared by the governing contract);
+`revise-affected-wave`, `resume-after-confirmed-external-state-change`, or
+another value declared by the governing contract);
 governing contract/DAG revision; affected subgraph; approval evidence when
 required; and confirmed resume phase. Append `decision-resolved` before removing
 `maestro:needs-human` or `maestro:scope-change` and restoring the recorded phase.
@@ -288,10 +309,27 @@ No other action outcome is valid.
 
 Mutation and expensive-review failures permit at most three consecutive attempts
 with one action identity and unchanged external state. The third failure produces
-one `retry-exhausted`; retry resumes only after relevant state changes. Pending
-CI, capacity exhaustion, and normal Cursor execution consume no attempt.
+one `retry-exhausted` pause identity and applies `maestro:needs-human`. Derive
+`retry-pause-v1:<digest>` from the canonical JSON array
+`["maestro-retry-pause-v1","<entity native UUID>","<action identity>","<failure category>",3,"<prior phase>","<resume phase>"]`.
+Record the array, digest, and phases in `retry-exhausted`. A relevant
+external state change is evidence for a possible recovery, not authority to
+resume. Retry resumes only after a matching `decision-resolved` names that exact
+pause identity, the disposition
+`resume-after-confirmed-external-state-change`, and the recorded resume phase.
+A stale or mismatched resolution leaves the pause and label intact. Pending CI,
+capacity exhaustion, and normal Cursor execution consume no attempt.
+If any retry-pause input is missing or the digest does not match, fail closed:
+append neither `retry-exhausted` nor its pause label, retain the prior phase, and
+report the invalid controller state for correction.
 
 ### Verdict mapping
+
+Review aggregation normalizes three booleans from confirmed evidence: strategic decision present, actionable defect present, and required evidence missing. Apply
+this total precedence exactly once: strategic decision wins; otherwise actionable
+defect wins; otherwise missing required evidence wins; otherwise pass. Thus the
+four predicates below are disjoint even when strategic decision, actionable
+defect, and required evidence states coexist.
 
 | Source verdict | Journal events | Controller transition |
 |---|---|---|
@@ -312,6 +350,7 @@ or choice group.
 | Kind | Value | Direction | Predicate | Next state | Choice group |
 |---|---|---|---|---|---|
 | `event` | `symphony-started` | `both` | `control-creation-is-confirmed` | `entity-discovery` | `none` |
+| `event` | `discovery-requested` | `both` | `canonical-discovery-request-is-durably-confirmed` | `discovery-active` | `none` |
 | `event` | `discovery-recorded` | `both` | `discovery-evidence-is-durably-confirmed` | `discovery-active` | `none` |
 | `event` | `discovery-completed` | `both` | `discovery-result-contract-is-confirmed` | `entity-complete` | `none` |
 | `event` | `dag-proposed` | `both` | `exact-dag-proposal-is-durably-confirmed` | `entity-planning` | `none` |
@@ -359,10 +398,10 @@ or choice group.
 | `risk-label` | `maestro-risk-security` | `both` | `issue-label-or-changed-surface-has-security-risk` | `security-lens-selected` | `none` |
 | `risk-label` | `maestro-risk-infra` | `both` | `issue-label-or-changed-surface-has-infrastructure-risk` | `infrastructure-lens-selected` | `none` |
 | `risk-label` | `maestro-risk-migration` | `both` | `issue-label-or-changed-surface-has-migration-risk` | `migration-lenses-selected` | `none` |
-| `review-verdict` | `pass` | `both` | `all-required-review-lenses-pass-with-evidence` | `review-passed` | `review-verdict` |
-| `review-verdict` | `changes-required` | `both` | `confirmed-review-finding-requires-change` | `review-changes-required` | `review-verdict` |
-| `review-verdict` | `human-decision` | `both` | `review-evidence-requires-bounded-or-strategic-decision` | `review-human-decision` | `review-verdict` |
-| `review-verdict` | `inconclusive` | `both` | `required-review-evidence-is-missing` | `review-inconclusive` | `review-verdict` |
+| `review-verdict` | `pass` | `both` | `aggregate-strategic-decision-actionable-defect-and-required-evidence-are-absent` | `review-passed` | `review-verdict` |
+| `review-verdict` | `changes-required` | `both` | `aggregate-strategic-decision-is-absent-and-actionable-defect-is-present` | `review-changes-required` | `review-verdict` |
+| `review-verdict` | `human-decision` | `both` | `aggregate-strategic-decision-is-present` | `review-human-decision` | `review-verdict` |
+| `review-verdict` | `inconclusive` | `both` | `aggregate-strategic-decision-and-actionable-defect-are-absent-and-required-evidence-is-missing` | `review-inconclusive` | `review-verdict` |
 | `reconciliation-verdict` | `complete` | `both` | `merge-reconciliation-is-complete-and-evidenced` | `implementation-complete` | `reconciliation-verdict` |
 | `reconciliation-verdict` | `human-decision` | `both` | `merge-is-observed-but-acceptance-needs-decision` | `reconciliation-human-decision` | `reconciliation-verdict` |
 | `reconciliation-verdict` | `inconclusive` | `both` | `merge-identity-or-acceptance-evidence-is-missing` | `reconciliation-inconclusive` | `reconciliation-verdict` |

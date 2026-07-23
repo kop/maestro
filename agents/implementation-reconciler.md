@@ -41,6 +41,10 @@ is marked `satisfied` with concrete evidence. Return `human-decision` when the
 merge is observable but a bounded or strategic decision prevents acceptance.
 Return `inconclusive` when identity or acceptance evidence is missing. A confirmed
 merge is evidence of delivery, never evidence that acceptance is satisfied.
+For every `follow-up-required` item, derive and return `follow_up_key` exactly as
+the Linear contract specifies. The display `Follow-up key` must repeat the same
+value; the controller recomputes it from the source issue UUID, merge SHA, and
+normalized discovered gap before any create.
 
 Return exactly the reconciliation verdict selected by those conditions:
 
@@ -99,10 +103,16 @@ DAG revision:
   Source merge evidence:
 
 ## Follow-up work
-- Proposed objective:
+- Classification:
+  follow_up_key: follow-up-v1:<digest>
+  Follow-up key: follow-up-v1:<digest>
+  Source implementation issue UUID:
+  Source merge SHA:
   Repository:
-  Dependency placement:
-  Reason:
+  Required outcome:
+  Normalized gap/evidence:
+  Dependency impact:
+  Acceptance criteria:
 
 ## Approval required
 - Decision:

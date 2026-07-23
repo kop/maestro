@@ -43,7 +43,9 @@ Discovery issues are Maestro-managed research work and are never delegated to
 Cursor.
 
 ```markdown
-Maestro-Discovery-Creation-Identity: <Symphony UUID + discovery revision + fixed discovery node/question key>
+Maestro-Discovery-Revision: discovery-v1:<digest>
+Maestro-Discovery-Question-Key: question-v1:<digest>
+Maestro-Discovery-Creation-Identity: <canonical creation tuple>
 
 ## Question
 ## Repository
@@ -55,10 +57,34 @@ Maestro-Discovery-Creation-Identity: <Symphony UUID + discovery revision + fixed
 ## Confidence and remaining unknowns
 ```
 
-A discovery identity uses a fixed approved/planned discovery node/question key,
-never a model-random value. Embed the identity in the initial issue, search the
-native Symphony scope before create and after an ambiguous create, and apply
-`maestro-managed` plus `maestro:discovery`.
+Before any discovery issue mutation, normalize the repository/question
+descriptors with the core identity text rules, encode each descriptor as
+`["<normalized-repository>","<normalized-question>"]`, deduplicate exact
+descriptors, and sort them by their canonical UTF-8 bytes. Each descriptor
+produces one fixed approved/planned discovery question key. The discovery
+revision is `discovery-v1:<digest>` of:
+
+```json
+["maestro-discovery-revision-v1","<Symphony UUID>","symphony-control-v1",[<ordered descriptors>]]
+```
+
+Append and confirm `discovery-requested` with that revision and complete ordered
+descriptor set before creating an issue. Each fixed question key is
+`question-v1:<digest>` of:
+
+```json
+["maestro-discovery-question-v1","<discovery revision>","<normalized repository>","<normalized question>"]
+```
+
+The embedded creation identity is the whitespace-free canonical array
+`["maestro-discovery-create-v1","<Symphony UUID>","<discovery revision>","<question key>"]`.
+These values are fixed by durable inputs, never model-random. Recompute the
+complete identity from the confirmed `discovery-requested` record and search the
+native Symphony scope before create, after an ambiguous create, and in every
+fresh session. Reuse exactly one match; zero permits one create attempt; fail
+closed on multiple matches and apply the bounded ambiguity pause. Apply
+`maestro-managed` plus `maestro:discovery` only to the confirmed unique record.
+The mandatory identity search runs before create and after an ambiguous result.
 
 A new discovery issue enters `maestro:discovery`. After its result and confidence
 sections are durably written, append `discovery-recorded`. When every required
@@ -191,7 +217,8 @@ revision can never authorize materialization.
 ## Required follow-up issue contract
 
 ```markdown
-Maestro-Follow-Up-Creation-Identity: <Symphony UUID + source implementation issue UUID + source merge SHA + fixed follow-up key>
+Maestro-Follow-Up-Key: follow-up-v1:<digest>
+Maestro-Follow-Up-Creation-Identity: <canonical follow-up creation tuple>
 
 ## Required outcome
 ## Source merge evidence
@@ -200,13 +227,57 @@ Maestro-Follow-Up-Creation-Identity: <Symphony UUID + source implementation issu
 ## Acceptance criteria
 ```
 
-The follow-up key is fixed by the reconciled issue contract. Embed the complete
-identity, search before create and after an ambiguous create, and never duplicate
-the follow-up on a later pass. Apply `maestro-managed`, repository routing,
+For each reconciler-declared follow-up, normalize these fields with the core
+single-line text rules: classification, repository, required outcome, normalized
+gap/evidence, and acceptance criteria. The reconciler and controller derive the
+same `follow-up-v1:<digest>` from:
+
+```json
+["maestro-follow-up-gap-v1","<source implementation issue UUID>","<source merge SHA>",["<classification>","<repository>","<required outcome>","<normalized gap/evidence>","<acceptance criteria>"]]
+```
+
+The controller must recompute the key and reject a reconciler result whose
+declared key differs. The complete embedded identity is
+`["maestro-follow-up-create-v1","<Symphony UUID>","<source issue UUID>","<source merge SHA>","<follow-up key>"]`.
+Search the exact native Symphony scope for the complete identity before create,
+after an ambiguous create, and in a fresh session. Reuse exactly one match; zero
+permits one create attempt; fail closed on multiple matches. Never duplicate the
+follow-up on a later pass. Apply `maestro-managed`, repository routing,
 entity-appropriate phase, and native dependency metadata required by its issue
 contract.
 
 ## Symphony closeout
+
+Before mutating closeout, build the canonical evidence list from every durable
+merge-reconciled, issue-cancelled, follow-up-created, discovery-completed,
+decision-resolved, and final integration evidence record that governs the final
+approved DAG revision. Encode every item as exactly three JSON
+strings: `["<family>","<native identity>","<durable revision>"]`. The finite
+family tags and third fields are: `merge`/merge SHA,
+`cancellation`/issue-cancelled action identity, `follow-up`/creation identity,
+`discovery`/discovery revision, `decision`/decision-resolved action identity,
+and `integration`/verification evidence revision. Deduplicate exact arrays, then sort the canonical evidence
+arrays lexicographically by UTF-8 bytes. Derive `evidence-v1:<digest>` from:
+
+```json
+["maestro-closeout-evidence-v1","<Symphony UUID>","<final approved DAG revision>","<final integration issue UUID>",[<ordered canonical evidence>]]
+```
+
+The complete Symphony mutation identity is
+`["maestro-symphony-complete-v1","<Symphony UUID>","<final DAG revision>","<final integration issue UUID>","<evidence revision>"]`.
+Embed `Maestro-Symphony-Completion-Identity: <canonical completion identity>` and
+`Maestro-Closeout-Evidence-Revision: evidence-v1:<digest>` in the
+`Final as-built outcome` update. Recompute both from durable records and search
+the control issue journal/native record before the final update, before a retry,
+and after an ambiguous result. Reuse one exact match, permit the mutation only
+for zero matches, and fail closed on multiple matches. A fresh session must
+derive the identical evidence revision without process memory or model-selected
+ordering.
+
+Cleanup debt is a separate fresh closeout gate. Because a cleared temporary
+resource has no durable success event in this protocol, its absence contributes
+no invented evidence item; any still-present `cleanup-failed` debt blocks the
+mutation before identity derivation.
 
 The control issue remains open until the final integration/outcome-verification
 issue has succeeded with linked evidence and all of these conditions are true:

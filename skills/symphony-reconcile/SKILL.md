@@ -66,6 +66,8 @@ provider evidence named by its transition:
 
 rule symphony-reconcile-consume-event-symphony-started | when control-creation-is-confirmed | consume event `symphony-started` | next entity-discovery | choice none
 
+rule symphony-reconcile-consume-event-discovery-requested | when canonical-discovery-request-is-durably-confirmed | consume event `discovery-requested` | next discovery-active | choice none
+
 rule symphony-reconcile-consume-event-discovery-recorded | when discovery-evidence-is-durably-confirmed | consume event `discovery-recorded` | next discovery-active | choice none
 
 rule symphony-reconcile-consume-event-discovery-completed | when discovery-result-contract-is-confirmed | consume event `discovery-completed` | next entity-complete | choice none
@@ -127,15 +129,16 @@ Repair only generated, mechanically derivable metadata. For semantic drift:
 rule symphony-reconcile-append-event-semantic-drift-detected | when normalized-contract-or-edge-drift-is-confirmed | append event `semantic-drift-detected` | next affected-subgraph-paused | choice none
 
 GitHub merge evidence is authoritative over lagging Linear automation. Done without
-a merge-reconciliation identity never unlocks dependants.
+a merge-reconciliation identity never unlocks dependants. The state merged remains distinct
+from a confirmed `merge-reconciled` result.
 
 ## 3. Reconcile merges first
 
-For every merged PR lacking a confirmed merge action identity:
+For every merged PR lacking a confirmed `merge-reconciled` result for its source issue and merge SHA:
 
-1. Re-read the final PR and merge SHA. Append or recover `merge-observed` so the
-   confirmed GitHub merge is never forgotten while merged remains distinct from
-   merge-reconciled.
+1. Re-read the final PR and merge SHA. Append `merge-observed` only if that event
+   is absent, otherwise consume it. The existence of `merge-observed` never
+   suppresses reconciliation and never counts as `merge-reconciled`.
 2. Obtain the final diff and relevant repository evidence.
 3. Dispatch `maestro:implementation-reconciler` with the complete reconciliation
    envelope.
@@ -174,8 +177,14 @@ rule symphony-reconcile-append-event-decision-resolved | when resolution-disposi
 
 rule symphony-reconcile-append-event-follow-up-created | when required-follow-up-identity-is-confirmed | append event `follow-up-created` | next follow-up-inventory-confirmed | choice none
 
-For every required follow-up, derive
-`Maestro-Follow-Up-Creation-Identity` from Symphony UUID + source implementation issue UUID + source merge SHA + fixed follow-up key. Embed it, search before create and after an ambiguous create, and never duplicate it on a later pass. Apply managed/routing/dependency metadata from its issue contract.
+For every required follow-up, recompute and validate the reconciler's
+`follow-up-v1:` key from source implementation issue UUID, source merge SHA, and
+the normalized gap fields in the Linear contract. Derive the complete
+`Maestro-Follow-Up-Creation-Identity` from Symphony UUID plus those durable
+inputs; this is the source implementation issue UUID + source merge SHA + fixed follow-up key contract. Search the exact native scope before create, after an ambiguous create,
+and in every fresh session. Reuse exactly one match; fail closed on multiple
+matches; never duplicate it on a later pass. Apply managed/routing/dependency
+metadata from its issue contract.
 
 rule symphony-reconcile-append-event-action-failed | when material-action-attempt-is-not-confirmed | append event `action-failed` | next bounded-recovery | choice none
 
@@ -203,13 +212,13 @@ For each relevant current PR head without a confirmed review identity:
 
 Consume the review result according to its exact returned value:
 
-rule symphony-reconcile-consume-review-verdict-pass | when all-required-review-lenses-pass-with-evidence | consume review verdict `pass` | next review-passed | choice review-verdict
+rule symphony-reconcile-consume-review-verdict-pass | when aggregate-strategic-decision-actionable-defect-and-required-evidence-are-absent | consume review verdict `pass` | next review-passed | choice review-verdict
 
-rule symphony-reconcile-consume-review-verdict-changes-required | when confirmed-review-finding-requires-change | consume review verdict `changes-required` | next review-changes-required | choice review-verdict
+rule symphony-reconcile-consume-review-verdict-changes-required | when aggregate-strategic-decision-is-absent-and-actionable-defect-is-present | consume review verdict `changes-required` | next review-changes-required | choice review-verdict
 
-rule symphony-reconcile-consume-review-verdict-human-decision | when review-evidence-requires-bounded-or-strategic-decision | consume review verdict `human-decision` | next review-human-decision | choice review-verdict
+rule symphony-reconcile-consume-review-verdict-human-decision | when aggregate-strategic-decision-is-present | consume review verdict `human-decision` | next review-human-decision | choice review-verdict
 
-rule symphony-reconcile-consume-review-verdict-inconclusive | when required-review-evidence-is-missing | consume review verdict `inconclusive` | next review-inconclusive | choice review-verdict
+rule symphony-reconcile-consume-review-verdict-inconclusive | when aggregate-strategic-decision-and-actionable-defect-are-absent-and-required-evidence-is-missing | consume review verdict `inconclusive` | next review-inconclusive | choice review-verdict
 
 Maestro does not triage other reviewers' comments and does not diagnose ordinary
 CI failures. Cursor owns all PR convergence.
@@ -223,8 +232,12 @@ current head.
 
 For approved outstanding discovery:
 
+- canonicalize the complete approved descriptor set and append/confirm
+  `discovery-requested` before any discovery issue mutation;
 - dispatch `maestro:symphony-researcher` with bounded parallelism;
-- create any approved discovery issue with `maestro-managed` and
+- derive each complete discovery identity from that record; search the exact
+  scope before create/retry, fail closed on multiple matches, and create any
+  missing approved discovery issue with `maestro-managed` and
   `maestro:discovery`;
 - write returned evidence to the matching discovery issue and append
   `discovery-recorded`;
@@ -243,6 +256,8 @@ materialization resumes. Follow the durable node/edge binding protocol in the
 Linear reference and append `dag-materialized` only after all native objects are
 confirmed. Append each required `dag-node-bound` and `dag-edge-bound` during that
 recovery/materialization sequence.
+
+rule symphony-reconcile-append-event-discovery-requested | when canonical-discovery-request-is-durably-confirmed | append event `discovery-requested` | next discovery-active | choice none
 
 rule symphony-reconcile-append-event-discovery-recorded | when discovery-evidence-is-durably-confirmed | append event `discovery-recorded` | next discovery-active | choice none
 
@@ -347,7 +362,15 @@ confirm external outcomes afterward.
 Mutations and expensive reviews use the failure taxonomy and a default maximum of
 three consecutive attempts with the same action identity and unchanged state.
 After three consecutive attempts, append one `retry-exhausted` event, apply
-`maestro:needs-human`, and wait for relevant state change.
+`maestro:needs-human`, and preserve its exact pause identity and recorded resume
+phase. A relevant external state change does not itself resume work. Resume only
+after a `decision-resolved` matches that pause identity, declares
+`resume-after-confirmed-external-state-change`, and confirms the recorded phase;
+stale or mismatched resolutions remain paused. Remove the label and resume the
+declared phase only after that event is durable.
+Derive and validate the complete `retry-pause-v1:` identity before appending the
+exhaustion event or applying the label. Missing inputs or a mismatched digest
+suppress both mutations and retain the prior phase.
 
 rule symphony-reconcile-append-event-retry-exhausted | when unchanged-state-retry-budget-is-exhausted | append event `retry-exhausted` | next entity-needs-human | choice none
 

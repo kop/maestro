@@ -1,0 +1,5 @@
+case_id	strategic_decision	actionable_defect	missing_required_evidence	expected_verdict
+strategic_defect_missing	present	present	present	human-decision
+defect_missing	absent	present	present	changes-required
+missing_only	absent	absent	present	inconclusive
+all_clear	absent	absent	absent	pass

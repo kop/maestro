@@ -305,7 +305,7 @@ assert_contains skills/symphony-start/SKILL.md 'must not select.*revision'
 if [[ "${STATE_MACHINE_CONFORMANCE_SKIP_MUTATIONS:-0}" != 1 ]]; then
   mutation_root="$tmp_dir/mutations"
   for variant in naked wrong-predicate coherent-undeclared duplicate-always undeclared \
-    phase-outside verdict-outside; do
+    phase-outside verdict-outside review-precedence-regression; do
     mkdir -p "$mutation_root/$variant"
     cp -R agents references skills tests README.md "$mutation_root/$variant/"
   done
@@ -332,9 +332,13 @@ if [[ "${STATE_MACHINE_CONFORMANCE_SKIP_MUTATIONS:-0}" != 1 ]]; then
     "$mutation_root/verdict-outside/skills/symphony-review/SKILL.md"
   sed -i '/^review-verdict\tpass\t/s/review-passed/review-inconclusive/' \
     "$mutation_root/verdict-outside/tests/fixtures/state-machine-matrix.tsv"
+  sed -i 's/aggregate-strategic-decision-is-absent-and-actionable-defect-is-present/aggregate-actionable-defect-is-present/g' \
+    "$mutation_root/review-precedence-regression/skills/symphony-review/SKILL.md" \
+    "$mutation_root/review-precedence-regression/skills/symphony-reconcile/SKILL.md" \
+    "$mutation_root/review-precedence-regression/tests/fixtures/state-machine-matrix.tsv"
 
   for variant in naked wrong-predicate coherent-undeclared duplicate-always undeclared \
-    phase-outside verdict-outside; do
+    phase-outside verdict-outside review-precedence-regression; do
     if (
       cd "$mutation_root/$variant"
       STATE_MACHINE_CONFORMANCE_SKIP_MUTATIONS=1 \

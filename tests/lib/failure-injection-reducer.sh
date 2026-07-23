@@ -32,9 +32,50 @@ unattached_cleanup_is_safe() {
      "$7" == "expected" ]]
 }
 
+retry_pause_identity_is_canonical() {
+  local entity_uuid=$1 action_identity=$2 failure_category=$3
+  local prior_phase=$4 resume_phase=$5 observed_identity=$6
+  local canonical digest encoded_entity encoded_action encoded_failure
+  local encoded_prior encoded_resume
+
+  [[ -n "$entity_uuid" && -n "$action_identity" &&
+     -n "$failure_category" && -n "$prior_phase" &&
+     -n "$resume_phase" && -n "$observed_identity" ]] || return 1
+  encoded_entity=$(json_string "$entity_uuid")
+  encoded_action=$(json_string "$action_identity")
+  encoded_failure=$(json_string "$failure_category")
+  encoded_prior=$(json_string "$prior_phase")
+  encoded_resume=$(json_string "$resume_phase")
+  canonical=$(printf \
+    '["maestro-retry-pause-v1",%s,%s,%s,3,%s,%s]' \
+    "$encoded_entity" "$encoded_action" "$encoded_failure" \
+    "$encoded_prior" "$encoded_resume")
+  digest=$(printf '%s' "$canonical" | sha256sum)
+  digest=${digest%% *}
+  [[ "$observed_identity" == "retry-pause-v1:$digest" ]]
+}
+
+json_string() {
+  local value=$1
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\b'/\\b}
+  value=${value//$'\f'/\\f}
+  value=${value//$'\n'/\\n}
+  value=${value//$'\r'/\\r}
+  value=${value//$'\t'/\\t}
+  printf '"%s"' "$value"
+}
+
 emit_validation_timeout_plan() {
   local cleanup_kind=$1 attempts=$2 state_changed=$3 state_observation=$4
   local exhaustion_event=$5 retry_identity=$6
+  local resolution_event=$7 resolution_match=$8 disposition=$9
+  local resume_phase=${10}
+  local pause_identity=${11} resolution_pause_identity=${12}
+  local entity_uuid=${13} retry_action_identity=${14}
+  local failure_category=${15} prior_phase=${16}
+  local pause_resume_phase=${17}
   local reads mutations events suppressed next
 
   case "$cleanup_kind" in
@@ -70,19 +111,44 @@ emit_validation_timeout_plan() {
     if [[ "$cleanup_kind" == "unsafe" ]]; then
       suppressed+=,bounded-retry-until-cleanup-safe,duplicate-retry-exhausted,unbounded-retry
       next+=-before-bounded-retry
-    else
+    elif [[ "$resolution_event" == "recorded" &&
+            "$resolution_match" == "exact" &&
+            -n "$pause_identity" &&
+            "$resolution_pause_identity" == "$pause_identity" &&
+            "$disposition" == "resume-after-confirmed-external-state-change" &&
+            "$resume_phase" == "confirmed" ]]; then
+      reads+=,pause-identity,decision-resolved
       mutations+=,resume-prior-phase,bounded-retry
       suppressed+=,duplicate-retry-exhausted,unbounded-retry
-      next+=-retry-after-confirmed-state-change
+      next+=-retry-after-durable-resolution
+    else
+      reads+=,pause-identity,decision-resolved
+      suppressed+=,resume-prior-phase,bounded-retry,remove-needs-human,duplicate-retry-exhausted,unbounded-retry
+      if [[ "$resolution_event" == "recorded" ]]; then
+        next+=-needs-human-stale-resolution
+      else
+        next+=-needs-human-await-matching-resolution
+      fi
     fi
   elif [[ "$attempts" == "exhausted" ]]; then
     reads+=,action-journal,relevant-state
-    suppressed+=,further-mutation
-    next+=-needs-human
     if [[ "$state_changed" == "false" &&
           "$exhaustion_event" == "absent" ]]; then
-      mutations+=,apply-needs-human
-      events+=,retry-exhausted
+      reads+=,pause-identity-inputs
+      if retry_pause_identity_is_canonical \
+          "$entity_uuid" "$retry_action_identity" "$failure_category" \
+          "$prior_phase" "$pause_resume_phase" "$pause_identity"; then
+        suppressed+=,further-mutation
+        next+=-needs-human
+        mutations+=,apply-needs-human
+        events+=,retry-exhausted
+      else
+        suppressed+=,apply-needs-human,retry-exhausted,further-mutation
+        next+=-pause-identity-invalid
+      fi
+    else
+      suppressed+=,further-mutation
+      next+=-needs-human
     fi
   fi
 
@@ -134,26 +200,101 @@ reduce_controller_state() {
     emit_validation_timeout_plan "$cleanup_kind" \
       "${predicate[attempts]:-}" "${predicate[state_changed]:-}" \
       "${predicate[state_change_observation]:-}" \
-      "${predicate[exhaustion_event]:-}" "${predicate[retry_identity]:-}"
+      "${predicate[exhaustion_event]:-}" "${predicate[retry_identity]:-}" \
+      "${predicate[resolution_event]:-}" "${predicate[resolution_match]:-}" \
+      "${predicate[disposition]:-}" "${predicate[resume_phase]:-}" \
+      "${predicate[pause_identity]:-}" \
+      "${predicate[resolution_pause_identity]:-}" \
+      "${predicate[entity_uuid]:-}" \
+      "${predicate[retry_action_identity]:-}" \
+      "${predicate[failure_category]:-}" \
+      "${predicate[prior_phase]:-}" \
+      "${predicate[pause_resume_phase]:-}"
+  elif [[ "${predicate[attempts]:-}" == "exhausted" &&
+        "${predicate[state_changed]:-}" == "true" &&
+        "${predicate[state_change_observation]:-}" == "confirmed" &&
+        "${predicate[exhaustion_event]:-}" == "recorded" &&
+        "${predicate[action_identity]:-}" == "stable" &&
+        "${predicate[resolution_event]:-}" == "recorded" &&
+        "${predicate[resolution_match]:-}" == "exact" &&
+        -n "${predicate[pause_identity]:-}" &&
+        "${predicate[resolution_pause_identity]:-}" == \
+          "${predicate[pause_identity]:-}" &&
+        "${predicate[disposition]:-}" == \
+          "resume-after-confirmed-external-state-change" &&
+        "${predicate[resume_phase]:-}" == "confirmed" ]]; then
+    emit_action_plan "${predicate[failure]:-permanent-invalid}" \
+      action-journal,fresh-native-state,relevant-state,stable-action-identity,pause-identity,decision-resolved \
+      resume-prior-phase,bounded-retry none \
+      duplicate-retry-exhausted,unbounded-retry \
+      retry-after-durable-resolution
   elif [[ "${predicate[attempts]:-}" == "exhausted" &&
         "${predicate[state_changed]:-}" == "true" &&
         "${predicate[state_change_observation]:-}" == "confirmed" &&
         "${predicate[exhaustion_event]:-}" == "recorded" &&
         "${predicate[action_identity]:-}" == "stable" ]]; then
-    emit_action_plan "${predicate[failure]:-permanent-invalid}" \
-      action-journal,fresh-native-state,relevant-state,stable-action-identity \
-      resume-prior-phase,bounded-retry none \
-      duplicate-retry-exhausted,unbounded-retry \
-      retry-after-confirmed-state-change
+    if [[ "${predicate[resolution_event]:-}" == "recorded" ]]; then
+      emit_action_plan "${predicate[failure]:-permanent-invalid}" \
+        action-journal,fresh-native-state,relevant-state,stable-action-identity,pause-identity,decision-resolved \
+        none none \
+        resume-prior-phase,bounded-retry,remove-needs-human,duplicate-retry-exhausted,unbounded-retry \
+        needs-human-stale-resolution
+    else
+      emit_action_plan "${predicate[failure]:-permanent-invalid}" \
+        action-journal,fresh-native-state,relevant-state,stable-action-identity,pause-identity,decision-resolved \
+        none none \
+        resume-prior-phase,bounded-retry,remove-needs-human,duplicate-retry-exhausted,unbounded-retry \
+        needs-human-await-matching-resolution
+    fi
   elif [[ "${predicate[attempts]:-}" == "exhausted" &&
         "${predicate[state_changed]:-}" == "false" &&
         "${predicate[exhaustion_event]:-}" == "absent" ]]; then
-    emit_action_plan "${predicate[failure]:-permanent-invalid}" \
-      action-journal,relevant-state apply-needs-human retry-exhausted \
-      further-mutation needs-human
+    if retry_pause_identity_is_canonical \
+        "${predicate[entity_uuid]:-}" "${predicate[action_identity]:-}" \
+        "${predicate[failure]:-}" "${predicate[prior_phase]:-}" \
+        "${predicate[resume_phase]:-}" "${predicate[pause_identity]:-}"; then
+      emit_action_plan "${predicate[failure]:-permanent-invalid}" \
+        action-journal,relevant-state,pause-identity-inputs \
+        apply-needs-human retry-exhausted further-mutation needs-human
+    else
+      emit_action_plan "${predicate[failure]:-permanent-invalid}" \
+        action-journal,relevant-state,pause-identity-inputs none none \
+        apply-needs-human,retry-exhausted,further-mutation \
+        pause-identity-invalid
+    fi
   elif [[ "${predicate[attempts]:-}" == "exhausted" ]]; then
     emit_action_plan "${predicate[failure]:-permanent-invalid}" \
       action-journal,relevant-state none none further-mutation needs-human
+  elif [[ "${predicate[surface]:-}" == "status" &&
+          "${predicate[exhaustion_event]:-}" == "recorded" &&
+          "${predicate[resolution_event]:-}" == "recorded" &&
+          "${predicate[resolution_match]:-}" == "exact" &&
+          -n "${predicate[pause_identity]:-}" &&
+          "${predicate[resolution_pause_identity]:-}" == \
+            "${predicate[pause_identity]:-}" &&
+          "${predicate[disposition]:-}" == \
+            "resume-after-confirmed-external-state-change" &&
+          "${predicate[resume_phase]:-}" == "confirmed" ]]; then
+    emit_action_plan none retry-exhausted,decision-resolved,native-phase \
+      none none none resolved-historical-exhaustion-closeout-clear
+  elif [[ "${predicate[surface]:-}" == "status" &&
+          "${predicate[exhaustion_event]:-}" == "recorded" ]]; then
+    emit_action_plan none retry-exhausted,decision-resolved,native-phase \
+      none none closeout unresolved-exhaustion-closeout-blocked
+  elif [[ "${predicate[surface]:-}" == "identity" &&
+          "${predicate[fresh_session]:-}" == "reproduced" &&
+          "${predicate[create_outcome]:-}" == "ambiguous" &&
+          "${predicate[identity_matches]:-}" == "one" ]]; then
+    emit_action_plan none \
+      "durable-${predicate[family]:-unknown}-inputs,canonical-identity,exact-native-scope" \
+      none none repeat-create recovered-canonical-record
+  elif [[ "${predicate[surface]:-}" == "identity" &&
+          "${predicate[fresh_session]:-}" == "reproduced" &&
+          "${predicate[create_outcome]:-}" == "ambiguous" &&
+          "${predicate[identity_matches]:-}" == "multiple" ]]; then
+    emit_action_plan mutation-ambiguous \
+      "durable-${predicate[family]:-unknown}-inputs,canonical-identity,exact-native-scope" \
+      none action-failed create,retry needs-human-ambiguous-identity
   elif [[ "${predicate[surface]:-}" == "linear" &&
           "${predicate[observation]:-}" == "partial" &&
           "${predicate[native_id]:-}" == "known" ]]; then
@@ -342,6 +483,21 @@ reduce_controller_state() {
     emit_action_plan none decision-resolved,native-phase,affected-subgraph \
       remove-pause-label,resume-recorded-phase none \
       duplicate-decision-resolved resumed-recorded-phase
+  elif [[ "${predicate[surface]:-}" == "reconciler" &&
+          "${predicate[merge]:-}" == "observed" &&
+          "${predicate[merge_reconciled]:-}" == "recorded" &&
+          "${predicate[verdict]:-}" == "complete" ]]; then
+    emit_action_plan none merge-observation,merge-reconciled none none \
+      duplicate-merge-observed,duplicate-merge-reconciled,reconciliation \
+      implementation-complete
+  elif [[ "${predicate[surface]:-}" == "reconciler" &&
+          "${predicate[merge]:-}" == "observed" &&
+          "${predicate[merge_reconciled]:-}" == "absent" &&
+          "${predicate[verdict]:-}" == "complete" ]]; then
+    emit_action_plan none \
+      merge-observation,reconciliation-evidence,reconciliation-action-identity \
+      complete-implementation,update-downstream merge-reconciled \
+      duplicate-merge-observed implementation-complete
   elif [[ "${predicate[surface]:-}" == "reconciler" &&
           "${predicate[merge]:-}" == "observed" &&
           "${predicate[verdict]:-}" == "human-decision" ]]; then

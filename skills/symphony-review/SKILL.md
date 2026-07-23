@@ -135,27 +135,33 @@ Deduplicate identical underlying findings while preserving sources. Retain
 distinct concerns on the same line. Validate every requested outcome against
 evidence; remove unsupported findings rather than forwarding speculation.
 
-Aggregate:
+Normalize the aggregate into three booleans: strategic decision present, actionable defect present, and required evidence missing. A strategic decision
+means the implementation requires an objective, scope, acceptance, strategic DAG,
+product, or architecture decision. An actionable defect means a confirmed
+blocker/major finding or product defect. Required evidence includes every required
+lens, all required validation commands, and all required acceptance evidence.
 
-- `changes-required` when any confirmed blocker/major finding exists;
-- `human-decision` when the implementation requires an objective, scope,
-  acceptance, strategic DAG, or architecture decision;
-- `inconclusive` when a required lens lacks evidence;
-- `pass` only when all required lenses pass and evidence covers the implementation
-  issue's required validation commands and required acceptance evidence.
+Select exactly one verdict in this precedence order:
+
+1. `human-decision` when strategic decision is present, regardless of defect or
+   missing evidence;
+2. otherwise `changes-required` when actionable defect is present, regardless of
+   missing evidence;
+3. otherwise `inconclusive` when required evidence is missing;
+4. otherwise `pass`.
 
 Missing required validation evidence or an unavailable required validator yields
 `inconclusive`; a confirmed product defect yields `changes-required`.
 
 Return exactly the verdict selected by those conditions:
 
-rule symphony-review-return-review-verdict-pass | when all-required-review-lenses-pass-with-evidence | return review verdict `pass` | next review-passed | choice review-verdict
+rule symphony-review-return-review-verdict-pass | when aggregate-strategic-decision-actionable-defect-and-required-evidence-are-absent | return review verdict `pass` | next review-passed | choice review-verdict
 
-rule symphony-review-return-review-verdict-changes-required | when confirmed-review-finding-requires-change | return review verdict `changes-required` | next review-changes-required | choice review-verdict
+rule symphony-review-return-review-verdict-changes-required | when aggregate-strategic-decision-is-absent-and-actionable-defect-is-present | return review verdict `changes-required` | next review-changes-required | choice review-verdict
 
-rule symphony-review-return-review-verdict-human-decision | when review-evidence-requires-bounded-or-strategic-decision | return review verdict `human-decision` | next review-human-decision | choice review-verdict
+rule symphony-review-return-review-verdict-human-decision | when aggregate-strategic-decision-is-present | return review verdict `human-decision` | next review-human-decision | choice review-verdict
 
-rule symphony-review-return-review-verdict-inconclusive | when required-review-evidence-is-missing | return review verdict `inconclusive` | next review-inconclusive | choice review-verdict
+rule symphony-review-return-review-verdict-inconclusive | when aggregate-strategic-decision-and-actionable-defect-are-absent-and-required-evidence-is-missing | return review verdict `inconclusive` | next review-inconclusive | choice review-verdict
 
 Repository CI, review, and merge gates are not prerequisites for a Symphony
 review `pass`. That verdict means Maestro's exact-SHA contextual review passed;

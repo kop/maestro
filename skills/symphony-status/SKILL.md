@@ -32,6 +32,8 @@ treating it as proof until provider state confirms its claim:
 
 rule symphony-status-consume-event-symphony-started | when control-creation-is-confirmed | consume event `symphony-started` | next entity-discovery | choice none
 
+rule symphony-status-consume-event-discovery-requested | when canonical-discovery-request-is-durably-confirmed | consume event `discovery-requested` | next discovery-active | choice none
+
 rule symphony-status-consume-event-discovery-recorded | when discovery-evidence-is-durably-confirmed | consume event `discovery-recorded` | next discovery-active | choice none
 
 rule symphony-status-consume-event-discovery-completed | when discovery-result-contract-is-confirmed | consume event `discovery-completed` | next entity-complete | choice none
@@ -102,6 +104,12 @@ rule symphony-status-read-label-maestro-risk-migration | when issue-label-or-cha
 
 If a current object or field is partial, omitted, inaccessible, or cannot be resolved by native ID, preserve dependent values as `unknown`, name missing evidence, and emit the complete required report structure. Never infer a pass, completion, approval, or failure.
 
+Pair every `retry-exhausted` pause identity with an exact `decision-resolved`.
+Report an exact pair as Resolved historical retry exhaustion and exclude it from
+current debt. Report an absent, stale, or mismatched pair as Unresolved retry
+exhaustion debt, retain the recorded needs-human phase, and block closeout. A
+changed provider state without the matching event remains unresolved.
+
 ## Status output
 
 Return:
@@ -141,7 +149,8 @@ Return:
 - Semantic drift:
 
 ## Controller failures and cleanup
-- Retry exhaustion:
+- Resolved historical retry exhaustion:
+- Unresolved retry exhaustion debt:
 - Ambiguous actions:
 - Owned-worktree cleanup:
 

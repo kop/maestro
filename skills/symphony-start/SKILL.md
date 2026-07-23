@@ -73,6 +73,8 @@ binding, materialization, pause, and retry state:
 
 rule symphony-start-consume-event-symphony-started | when control-creation-is-confirmed | consume event `symphony-started` | next entity-discovery | choice none
 
+rule symphony-start-consume-event-discovery-requested | when canonical-discovery-request-is-durably-confirmed | consume event `discovery-requested` | next discovery-active | choice none
+
 rule symphony-start-consume-event-discovery-recorded | when discovery-evidence-is-durably-confirmed | consume event `discovery-recorded` | next discovery-active | choice none
 
 rule symphony-start-consume-event-discovery-completed | when discovery-result-contract-is-confirmed | consume event `discovery-completed` | next entity-complete | choice none
@@ -88,6 +90,8 @@ rule symphony-start-consume-event-dag-node-bound | when one-native-node-binding-
 rule symphony-start-consume-event-dag-edge-bound | when one-native-edge-binding-is-confirmed | consume event `dag-edge-bound` | next dag-recovery | choice none
 
 rule symphony-start-consume-event-dag-materialized | when all-native-bindings-and-events-are-confirmed | consume event `dag-materialized` | next entity-executing | choice none
+
+rule symphony-start-consume-event-semantic-drift-detected | when normalized-contract-or-edge-drift-is-confirmed | consume event `semantic-drift-detected` | next affected-subgraph-paused | choice none
 
 rule symphony-start-consume-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | consume event `human-decision-required` | next affected-subgraph-paused | choice none
 
@@ -138,21 +142,29 @@ rule symphony-start-append-event-discovery-recorded | when discovery-evidence-is
 
 For heterogeneous or multi-repository discovery:
 
-1. Create idempotent discovery issues from the Discovery issue contract. Derive
-   `Maestro-Discovery-Creation-Identity` from Symphony UUID + discovery revision + fixed discovery node/question key, embed it in the initial issue, and search
-   it before create and after an ambiguous create. Apply `maestro-managed` plus
+1. Canonicalize the complete repository/question descriptor set as the Linear
+   contract specifies. Append and confirm `discovery-requested` with its
+   reproducible discovery revision and fixed question keys before any issue
+   mutation.
+2. Create idempotent discovery issues from the Discovery issue contract. Derive
+   `Maestro-Discovery-Creation-Identity` from the discovery revision + fixed discovery question key in that confirmed record, embed
+   it in the initial issue, and search the exact native scope before create,
+   after an ambiguous create, and in a fresh session. Reuse one match and fail
+   closed on multiple matches. Apply `maestro-managed` plus
    `maestro:discovery`. The fixed approved/planned key is never model-random.
-2. Never delegate them to Cursor.
-3. Dispatch bounded `maestro:symphony-researcher` agents in parallel, subject to
+3. Never delegate them to Cursor.
+4. Dispatch bounded `maestro:symphony-researcher` agents in parallel, subject to
    a maximum of three active research agents and one per repository.
-4. Put each result on its discovery issue and append `discovery-recorded`. When
+5. Put each result on its discovery issue and append `discovery-recorded`. When
    every required evidence item is answered or retained as an explicit unknown
    with consequence, append `discovery-completed`, then apply
    `maestro:complete` to that discovery issue only.
-5. Dispatch `maestro:code-architect` with the normalized repository matrix for
+6. Dispatch `maestro:code-architect` with the normalized repository matrix for
    cross-repository synthesis.
-6. Represent unresolved uncertainty as a discovery or proof-of-concept gate; do
+7. Represent unresolved uncertainty as a discovery or proof-of-concept gate; do
    not fabricate the rest of the DAG.
+
+rule symphony-start-append-event-discovery-requested | when canonical-discovery-request-is-durably-confirmed | append event `discovery-requested` | next discovery-active | choice none
 
 rule symphony-start-append-event-discovery-completed | when discovery-result-contract-is-confirmed | append event `discovery-completed` | next entity-complete | choice none
 
@@ -275,17 +287,26 @@ an ambiguous edge before materialization; append only its missing
 `dag-edge-bound`; then append only `dag-materialized`. Never create a node and
 dependant edge in the same unconfirmed step.
 
-When a prior `human-decision-required` or `semantic-drift-detected` pause is
-resolved, confirm its finite disposition, governing revision, affected subgraph,
-required approval evidence, and recorded resume phase. Append `decision-resolved`
-before removing a pause label or restoring that phase.
+When a prior `human-decision-required`, `semantic-drift-detected`, or
+`retry-exhausted` pause appears, preserve its exact pause identity and prior/resume
+phase. A changed external observation alone never resumes work. Confirm a matching
+`decision-resolved` for that exact pause identity, finite disposition, governing
+revision, affected subgraph, required approval evidence, and recorded resume phase
+before any resume. Only then, atomically remove the matching pause label and
+restore the declared phase; a stale or mismatched resolution remains paused.
+Require the matching `decision-resolved` before any resume transition.
 
 rule symphony-start-append-event-decision-resolved | when resolution-disposition-and-resume-evidence-are-confirmed | append event `decision-resolved` | next recorded-resume-phase | choice none
 
 For a non-confirmed material mutation, append `action-failed` with the finite
 outcome/category and retain the current entity phase. After the unchanged-state
-attempt limit, append `retry-exhausted` and apply `maestro:needs-human` with the
-prior/resume phase.
+attempt limit, append `retry-exhausted` with a reproducible pause identity and
+apply `maestro:needs-human` with the prior/resume phase. Relevant external state
+change may use disposition `resume-after-confirmed-external-state-change`, but
+only a matching durable `decision-resolved` authorizes the retry.
+Derive and validate the complete `retry-pause-v1:` identity before either
+mutation; missing inputs or a mismatched digest suppress both the event and label
+and retain the prior phase.
 
 rule symphony-start-apply-label-maestro-managed | when native-role-scope-is-confirmed | apply label `maestro-managed` | next role-label-confirmed | choice none
 
@@ -296,6 +317,8 @@ rule symphony-start-apply-label-maestro-risk-infra | when issue-label-or-changed
 rule symphony-start-apply-label-maestro-risk-migration | when issue-label-or-changed-surface-has-migration-risk | apply label `maestro-risk-migration` | next migration-lenses-selected | choice none
 
 rule symphony-start-apply-label-maestro-executing | when entity-scoped-execution-authority-is-confirmed | apply label `maestro:executing` | next entity-executing | choice entity-phase
+
+rule symphony-start-apply-label-maestro-needs-human | when entity-scoped-bounded-pause-is-confirmed | apply label `maestro:needs-human` | next entity-needs-human | choice entity-phase
 
 rule symphony-start-append-event-action-failed | when material-action-attempt-is-not-confirmed | append event `action-failed` | next bounded-recovery | choice none
 
