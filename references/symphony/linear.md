@@ -43,6 +43,8 @@ Discovery issues are Maestro-managed research work and are never delegated to
 Cursor.
 
 ```markdown
+Maestro-Discovery-Creation-Identity: <Symphony UUID + discovery revision + fixed discovery node/question key>
+
 ## Question
 ## Repository
 ## Evidence required
@@ -52,6 +54,11 @@ Cursor.
 ## Result
 ## Confidence and remaining unknowns
 ```
+
+A discovery identity uses a fixed approved/planned discovery node/question key,
+never a model-random value. Embed the identity in the initial issue, search the
+native Symphony scope before create and after an ambiguous create, and apply
+`maestro-managed` plus `maestro:discovery`.
 
 A new discovery issue enters `maestro:discovery`. After its result and confidence
 sections are durably written, append `discovery-recorded`. When every required
@@ -160,6 +167,44 @@ UUIDs and the native relation identity when available. Append `dag-materialized`
 only after every candidate and relation is confirmed. A fresh pass reconstructs
 `dag-approved`, existing `dag-node-bound` and `dag-edge-bound` events, verifies
 them against native records, and resumes only the missing work.
+
+Recovery is staged. A pass performs only the first applicable step:
+
+1. Proposed but not approved: perform no materialization.
+2. Approved with a missing node: create only that node and await confirmation.
+3. Ambiguous node creation: search its action identity; create no edge.
+4. Confirmed node without its binding event: append only `dag-node-bound`.
+5. All nodes bound with a missing edge: create only that edge and await confirmation.
+6. Ambiguous edge creation: resolve the native edge; perform no materialization.
+7. Confirmed edge without its binding event: append only `dag-edge-bound`.
+8. All node and edge bindings confirmed: append only `dag-materialized`.
+9. Already materialized: perform no duplicate mutation or event.
+
+A node and its dependant edge are never created in the same unconfirmed step.
+`dag-materialized` is impossible until every required binding is confirmed.
+
+If the user rejects a proposal, append `dag-rejected` before replanning with the
+Symphony UUID, exact rejected DAG/contract revision, proposal action identity,
+evidence, rationale, and whether it is superseded or may be revised. A rejected
+revision can never authorize materialization.
+
+## Required follow-up issue contract
+
+```markdown
+Maestro-Follow-Up-Creation-Identity: <Symphony UUID + source implementation issue UUID + source merge SHA + fixed follow-up key>
+
+## Required outcome
+## Source merge evidence
+## Repository and routing
+## Dependency impact
+## Acceptance criteria
+```
+
+The follow-up key is fixed by the reconciled issue contract. Embed the complete
+identity, search before create and after an ambiguous create, and never duplicate
+the follow-up on a later pass. Apply `maestro-managed`, repository routing,
+entity-appropriate phase, and native dependency metadata required by its issue
+contract.
 
 ## Symphony closeout
 

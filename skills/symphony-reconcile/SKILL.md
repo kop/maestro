@@ -64,47 +64,51 @@ only through the ownership checks in the review protocol.
 Consume every journal event while reconstructing history, then require the fresh
 provider evidence named by its transition:
 
-consume event `symphony-started`
+rule symphony-reconcile-consume-event-symphony-started | when control-creation-is-confirmed | consume event `symphony-started` | next entity-discovery | choice none
 
-consume event `discovery-recorded`
+rule symphony-reconcile-consume-event-discovery-recorded | when discovery-evidence-is-durably-confirmed | consume event `discovery-recorded` | next discovery-active | choice none
 
-consume event `discovery-completed`
+rule symphony-reconcile-consume-event-discovery-completed | when discovery-result-contract-is-confirmed | consume event `discovery-completed` | next entity-complete | choice none
 
-consume event `dag-proposed`
+rule symphony-reconcile-consume-event-dag-proposed | when exact-dag-proposal-is-durably-confirmed | consume event `dag-proposed` | next entity-planning | choice none
 
-consume event `dag-approved`
+rule symphony-reconcile-consume-event-dag-approved | when exact-dag-revision-approval-is-durably-confirmed | consume event `dag-approved` | next dag-recovery | choice none
 
-consume event `dag-node-bound`
+rule symphony-reconcile-consume-event-dag-rejected | when exact-dag-rejection-is-durably-confirmed | consume event `dag-rejected` | next dag-replanning | choice none
 
-consume event `dag-edge-bound`
+rule symphony-reconcile-consume-event-dag-node-bound | when one-native-node-binding-is-confirmed | consume event `dag-node-bound` | next dag-recovery | choice none
 
-consume event `dag-materialized`
+rule symphony-reconcile-consume-event-dag-edge-bound | when one-native-edge-binding-is-confirmed | consume event `dag-edge-bound` | next dag-recovery | choice none
 
-consume event `semantic-drift-detected`
+rule symphony-reconcile-consume-event-dag-materialized | when all-native-bindings-and-events-are-confirmed | consume event `dag-materialized` | next entity-executing | choice none
 
-consume event `issue-dispatched`
+rule symphony-reconcile-consume-event-semantic-drift-detected | when normalized-contract-or-edge-drift-is-confirmed | consume event `semantic-drift-detected` | next affected-subgraph-paused | choice none
 
-consume event `review-recorded`
+rule symphony-reconcile-consume-event-issue-dispatched | when cursor-delegation-is-freshly-confirmed | consume event `issue-dispatched` | next entity-executing | choice none
 
-consume event `review-stale-head`
+rule symphony-reconcile-consume-event-review-recorded | when canonical-exact-head-review-record-is-confirmed | consume event `review-recorded` | next review-gate-recorded | choice none
 
-consume event `merge-observed`
+rule symphony-reconcile-consume-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | consume event `review-stale-head` | next review-new-head | choice none
 
-consume event `merge-reconciled`
+rule symphony-reconcile-consume-event-merge-observed | when github-merge-sha-is-freshly-confirmed | consume event `merge-observed` | next merge-reconciliation-pending | choice none
 
-consume event `human-decision-required`
+rule symphony-reconcile-consume-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | consume event `merge-reconciled` | next implementation-complete | choice none
 
-consume event `follow-up-created`
+rule symphony-reconcile-consume-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | consume event `human-decision-required` | next affected-subgraph-paused | choice none
 
-consume event `issue-cancelled`
+rule symphony-reconcile-consume-event-decision-resolved | when resolution-disposition-and-resume-evidence-are-confirmed | consume event `decision-resolved` | next recorded-resume-phase | choice none
 
-consume event `action-failed`
+rule symphony-reconcile-consume-event-follow-up-created | when required-follow-up-identity-is-confirmed | consume event `follow-up-created` | next follow-up-inventory-confirmed | choice none
 
-consume event `retry-exhausted`
+rule symphony-reconcile-consume-event-issue-cancelled | when approved-cancellation-and-dependency-disposition-are-confirmed | consume event `issue-cancelled` | next implementation-complete | choice none
 
-consume event `cleanup-failed`
+rule symphony-reconcile-consume-event-action-failed | when material-action-attempt-is-not-confirmed | consume event `action-failed` | next bounded-recovery | choice none
 
-consume event `symphony-completed`
+rule symphony-reconcile-consume-event-retry-exhausted | when unchanged-state-retry-budget-is-exhausted | consume event `retry-exhausted` | next entity-needs-human | choice none
+
+rule symphony-reconcile-consume-event-cleanup-failed | when owned-cleanup-safety-or-completion-is-unconfirmed | consume event `cleanup-failed` | next cleanup-debt | choice none
+
+rule symphony-reconcile-consume-event-symphony-completed | when all-closeout-gates-and-final-outcome-are-confirmed | consume event `symphony-completed` | next entity-complete | choice none
 
 ## 2. Detect drift
 
@@ -120,7 +124,7 @@ Repair only generated, mechanically derivable metadata. For semantic drift:
    or edge diff and prior/resume phase;
 4. do not repeatedly restore the old value.
 
-append event `semantic-drift-detected`
+rule symphony-reconcile-append-event-semantic-drift-detected | when normalized-contract-or-edge-drift-is-confirmed | append event `semantic-drift-detected` | next affected-subgraph-paused | choice none
 
 GitHub merge evidence is authoritative over lagging Linear automation. Done without
 a merge-reconciliation identity never unlocks dependants.
@@ -155,23 +159,33 @@ For every merged PR lacking a confirmed merge action identity:
    leave the issue unreconciled and keep all downstream blockers locked.
 8. Recalculate downstream readiness only after confirmed `merge-reconciled`.
 
-append event `merge-observed`
+rule symphony-reconcile-append-event-merge-observed | when github-merge-sha-is-freshly-confirmed | append event `merge-observed` | next merge-reconciliation-pending | choice none
 
-append event `merge-reconciled`
+rule symphony-reconcile-append-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | append event `merge-reconciled` | next implementation-complete | choice none
 
-append event `human-decision-required`
+rule symphony-reconcile-append-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | append event `human-decision-required` | next affected-subgraph-paused | choice none
 
-append event `follow-up-created`
+Resolve a human-decision or semantic-drift pause only from a declared disposition,
+governing revision, affected subgraph, required approval evidence, and confirmed
+recorded resume phase. Append `decision-resolved` before removing
+`maestro:needs-human` or `maestro:scope-change`; then restore only that phase.
 
-append event `action-failed`
+rule symphony-reconcile-append-event-decision-resolved | when resolution-disposition-and-resume-evidence-are-confirmed | append event `decision-resolved` | next recorded-resume-phase | choice none
+
+rule symphony-reconcile-append-event-follow-up-created | when required-follow-up-identity-is-confirmed | append event `follow-up-created` | next follow-up-inventory-confirmed | choice none
+
+For every required follow-up, derive
+`Maestro-Follow-Up-Creation-Identity` from Symphony UUID + source implementation issue UUID + source merge SHA + fixed follow-up key. Embed it, search before create and after an ambiguous create, and never duplicate it on a later pass. Apply managed/routing/dependency metadata from its issue contract.
+
+rule symphony-reconcile-append-event-action-failed | when material-action-attempt-is-not-confirmed | append event `action-failed` | next bounded-recovery | choice none
 
 Consume the reconciler result according to its exact returned value:
 
-consume reconciliation verdict `complete`
+rule symphony-reconcile-consume-reconciliation-verdict-complete | when merge-reconciliation-is-complete-and-evidenced | consume reconciliation verdict `complete` | next implementation-complete | choice reconciliation-verdict
 
-consume reconciliation verdict `human-decision`
+rule symphony-reconcile-consume-reconciliation-verdict-human-decision | when merge-is-observed-but-acceptance-needs-decision | consume reconciliation verdict `human-decision` | next reconciliation-human-decision | choice reconciliation-verdict
 
-consume reconciliation verdict `inconclusive`
+rule symphony-reconcile-consume-reconciliation-verdict-inconclusive | when merge-identity-or-acceptance-evidence-is-missing | consume reconciliation verdict `inconclusive` | next reconciliation-inconclusive | choice reconciliation-verdict
 
 An ambiguous write is searched by native target/action identity before retry.
 
@@ -189,13 +203,13 @@ For each relevant current PR head without a confirmed review identity:
 
 Consume the review result according to its exact returned value:
 
-consume review verdict `pass`
+rule symphony-reconcile-consume-review-verdict-pass | when all-required-review-lenses-pass-with-evidence | consume review verdict `pass` | next review-passed | choice review-verdict
 
-consume review verdict `changes-required`
+rule symphony-reconcile-consume-review-verdict-changes-required | when confirmed-review-finding-requires-change | consume review verdict `changes-required` | next review-changes-required | choice review-verdict
 
-consume review verdict `human-decision`
+rule symphony-reconcile-consume-review-verdict-human-decision | when review-evidence-requires-bounded-or-strategic-decision | consume review verdict `human-decision` | next review-human-decision | choice review-verdict
 
-consume review verdict `inconclusive`
+rule symphony-reconcile-consume-review-verdict-inconclusive | when required-review-evidence-is-missing | consume review verdict `inconclusive` | next review-inconclusive | choice review-verdict
 
 Maestro does not triage other reviewers' comments and does not diagnose ordinary
 CI failures. Cursor owns all PR convergence.
@@ -230,19 +244,31 @@ Linear reference and append `dag-materialized` only after all native objects are
 confirmed. Append each required `dag-node-bound` and `dag-edge-bound` during that
 recovery/materialization sequence.
 
-append event `discovery-recorded`
+rule symphony-reconcile-append-event-discovery-recorded | when discovery-evidence-is-durably-confirmed | append event `discovery-recorded` | next discovery-active | choice none
 
-append event `discovery-completed`
+rule symphony-reconcile-append-event-discovery-completed | when discovery-result-contract-is-confirmed | append event `discovery-completed` | next entity-complete | choice none
 
-append event `dag-proposed`
+rule symphony-reconcile-append-event-dag-proposed | when exact-dag-proposal-is-durably-confirmed | append event `dag-proposed` | next entity-planning | choice none
 
-append event `dag-approved`
+rule symphony-reconcile-append-event-dag-approved | when exact-dag-revision-approval-is-durably-confirmed | append event `dag-approved` | next dag-recovery | choice none
 
-append event `dag-node-bound`
+On explicit rejection, append `dag-rejected` with the exact rejected
+DAG/contract revision, proposal action identity, evidence, rationale, and
+superseded/revisable disposition before replanning.
 
-append event `dag-edge-bound`
+rule symphony-reconcile-append-event-dag-rejected | when exact-dag-rejection-is-durably-confirmed | append event `dag-rejected` | next dag-replanning | choice none
 
-append event `dag-materialized`
+rule symphony-reconcile-append-event-dag-node-bound | when one-native-node-binding-is-confirmed | append event `dag-node-bound` | next dag-recovery | choice none
+
+rule symphony-reconcile-append-event-dag-edge-bound | when one-native-edge-binding-is-confirmed | append event `dag-edge-bound` | next dag-recovery | choice none
+
+rule symphony-reconcile-append-event-dag-materialized | when all-native-bindings-and-events-are-confirmed | append event `dag-materialized` | next entity-executing | choice none
+
+Partial materialization advances only one confirmed step per pass: one node
+create, node identity resolution, one node-binding event, one edge create, edge
+identity resolution, one edge-binding event, or the final materialization event.
+Never create a node and dependant edge together. Every native binding must be
+confirmed before `dag-materialized`.
 
 ## 6. Dispatch ready implementation issues
 
@@ -272,7 +298,7 @@ For each available slot:
 6. Apply `maestro:executing`.
 7. Append one `issue-dispatched` journal event with the native action identity.
 
-append event `issue-dispatched`
+rule symphony-reconcile-append-event-issue-dispatched | when cursor-delegation-is-freshly-confirmed | append event `issue-dispatched` | next entity-executing | choice none
 
 If delegation is ambiguous, search for the existing Cursor delegation before
 retrying. Capacity exhaustion is not a failure and creates no event.
@@ -287,7 +313,7 @@ Do not unlock a dependant unless the approved revised DAG removes the cancelled
 contract or names its replacement. Cancellation never implies completion of the
 control issue or Symphony.
 
-append event `issue-cancelled`
+rule symphony-reconcile-append-event-issue-cancelled | when approved-cancellation-and-dependency-disposition-are-confirmed | append event `issue-cancelled` | next implementation-complete | choice none
 
 ## 7. Evaluate Symphony closeout
 
@@ -311,7 +337,7 @@ approved/reconciled scope plus material deviations/follow-ups. Confirm the updat
 append exactly one `symphony-completed` event, then apply and confirm
 `maestro:complete` on the control issue only.
 
-append event `symphony-completed`
+rule symphony-reconcile-append-event-symphony-completed | when all-closeout-gates-and-final-outcome-are-confirmed | append event `symphony-completed` | next entity-complete | choice none
 
 ## 8. Journal and exit
 
@@ -323,11 +349,11 @@ three consecutive attempts with the same action identity and unchanged state.
 After three consecutive attempts, append one `retry-exhausted` event, apply
 `maestro:needs-human`, and wait for relevant state change.
 
-append event `retry-exhausted`
+rule symphony-reconcile-append-event-retry-exhausted | when unchanged-state-retry-budget-is-exhausted | append event `retry-exhausted` | next entity-needs-human | choice none
 
 If ownership-checked cleanup cannot complete, preserve its debt and execute:
 
-append event `cleanup-failed`
+rule symphony-reconcile-append-event-cleanup-failed | when owned-cleanup-safety-or-completion-is-unconfirmed | append event `cleanup-failed` | next cleanup-debt | choice none
 
 End quietly unless:
 
@@ -346,93 +372,93 @@ reconciled=<count> reviewed=<count> dispatched=<count> material_events=<count>
 
 Apply only the label transition selected by the entity-scoped rules above:
 
-apply label `maestro-managed`
+rule symphony-reconcile-apply-label-maestro-managed | when native-role-scope-is-confirmed | apply label `maestro-managed` | next role-label-confirmed | choice none
 
-apply label `maestro:discovery`
+rule symphony-reconcile-apply-label-maestro-discovery | when entity-scoped-discovery-authority-is-confirmed | apply label `maestro:discovery` | next entity-discovery | choice entity-phase
 
-apply label `maestro:planning`
+rule symphony-reconcile-apply-label-maestro-planning | when entity-scoped-planning-authority-is-confirmed | apply label `maestro:planning` | next entity-planning | choice entity-phase
 
-apply label `maestro:executing`
+rule symphony-reconcile-apply-label-maestro-executing | when entity-scoped-execution-authority-is-confirmed | apply label `maestro:executing` | next entity-executing | choice entity-phase
 
-apply label `maestro:needs-human`
+rule symphony-reconcile-apply-label-maestro-needs-human | when entity-scoped-bounded-pause-is-confirmed | apply label `maestro:needs-human` | next entity-needs-human | choice entity-phase
 
-apply label `maestro:scope-change`
+rule symphony-reconcile-apply-label-maestro-scope-change | when entity-scoped-strategic-drift-is-confirmed | apply label `maestro:scope-change` | next entity-scope-change | choice entity-phase
 
-apply label `maestro:complete`
+rule symphony-reconcile-apply-label-maestro-complete | when entity-scoped-completion-authority-is-confirmed | apply label `maestro:complete` | next entity-complete | choice entity-phase
 
-apply label `maestro-risk-security`
+rule symphony-reconcile-apply-label-maestro-risk-security | when issue-label-or-changed-surface-has-security-risk | apply label `maestro-risk-security` | next security-lens-selected | choice none
 
-apply label `maestro-risk-infra`
+rule symphony-reconcile-apply-label-maestro-risk-infra | when issue-label-or-changed-surface-has-infrastructure-risk | apply label `maestro-risk-infra` | next infrastructure-lens-selected | choice none
 
-apply label `maestro-risk-migration`
+rule symphony-reconcile-apply-label-maestro-risk-migration | when issue-label-or-changed-surface-has-migration-risk | apply label `maestro-risk-migration` | next migration-lenses-selected | choice none
 
 ## Classify reconciliation attempts
 
 Every provider read, review, or mutation attempt emits exactly one outcome and
 consumes it to select the transition:
 
-emit outcome `confirmed`
+rule symphony-reconcile-emit-outcome-confirmed | when external-result-is-freshly-confirmed | emit outcome `confirmed` | next advance-confirmed-transition | choice action-outcome
 
-consume outcome `confirmed`
+rule symphony-reconcile-consume-outcome-confirmed | when external-result-is-freshly-confirmed | consume outcome `confirmed` | next advance-confirmed-transition | choice action-outcome
 
-emit outcome `ambiguous`
+rule symphony-reconcile-emit-outcome-ambiguous | when external-result-may-exist-without-confirmation | emit outcome `ambiguous` | next resolve-action-identity | choice action-outcome
 
-consume outcome `ambiguous`
+rule symphony-reconcile-consume-outcome-ambiguous | when external-result-may-exist-without-confirmation | consume outcome `ambiguous` | next resolve-action-identity | choice action-outcome
 
-emit outcome `retryable-failure`
+rule symphony-reconcile-emit-outcome-retryable-failure | when unchanged-state-permits-bounded-retry | emit outcome `retryable-failure` | next bounded-retry-with-phase-retained | choice action-outcome
 
-consume outcome `retryable-failure`
+rule symphony-reconcile-consume-outcome-retryable-failure | when unchanged-state-permits-bounded-retry | consume outcome `retryable-failure` | next bounded-retry-with-phase-retained | choice action-outcome
 
-emit outcome `permanent-failure`
+rule symphony-reconcile-emit-outcome-permanent-failure | when confirmed-invalid-state-or-capability-blocks-retry | emit outcome `permanent-failure` | next pause-affected-work | choice action-outcome
 
-consume outcome `permanent-failure`
+rule symphony-reconcile-consume-outcome-permanent-failure | when confirmed-invalid-state-or-capability-blocks-retry | consume outcome `permanent-failure` | next pause-affected-work | choice action-outcome
 
 When the outcome requires a category, emit an applicable locally produced
 category. Consume every category returned by this pass or by `symphony-review`,
 using the adjacent retryability rule:
 
-emit failure category `observation-failed`
+rule symphony-reconcile-emit-failure-category-observation-failed | when observation-failed-category-is-evidenced | emit failure category `observation-failed` | next observation-failed-recovery | choice none
 
-consume failure category `observation-failed`
+rule symphony-reconcile-consume-failure-category-observation-failed | when observation-failed-category-is-evidenced | consume failure category `observation-failed` | next observation-failed-recovery | choice none
 Retryability: Retry the read later; authorize no dependent mutation
 
-emit failure category `observation-incomplete`
+rule symphony-reconcile-emit-failure-category-observation-incomplete | when observation-incomplete-category-is-evidenced | emit failure category `observation-incomplete` | next observation-incomplete-recovery | choice none
 
-consume failure category `observation-incomplete`
+rule symphony-reconcile-consume-failure-category-observation-incomplete | when observation-incomplete-category-is-evidenced | consume failure category `observation-incomplete` | next observation-incomplete-recovery | choice none
 Retryability: Resolve directly by native ID before retrying the dependent action
 
-emit failure category `external-transient`
+rule symphony-reconcile-emit-failure-category-external-transient | when external-transient-category-is-evidenced | emit failure category `external-transient` | next external-transient-recovery | choice none
 
-consume failure category `external-transient`
+rule symphony-reconcile-consume-failure-category-external-transient | when external-transient-category-is-evidenced | consume failure category `external-transient` | next external-transient-recovery | choice none
 Retryability: Retry the affected operation while unrelated work continues
 
-emit failure category `mutation-ambiguous`
+rule symphony-reconcile-emit-failure-category-mutation-ambiguous | when mutation-ambiguous-category-is-evidenced | emit failure category `mutation-ambiguous` | next mutation-ambiguous-recovery | choice none
 
-consume failure category `mutation-ambiguous`
+rule symphony-reconcile-consume-failure-category-mutation-ambiguous | when mutation-ambiguous-category-is-evidenced | consume failure category `mutation-ambiguous` | next mutation-ambiguous-recovery | choice none
 Retryability: Search by native target and action identity before any retry
 
-emit failure category `semantic-drift`
+rule symphony-reconcile-emit-failure-category-semantic-drift | when semantic-drift-category-is-evidenced | emit failure category `semantic-drift` | next semantic-drift-recovery | choice none
 
-consume failure category `semantic-drift`
+rule symphony-reconcile-consume-failure-category-semantic-drift | when semantic-drift-category-is-evidenced | consume failure category `semantic-drift` | next semantic-drift-recovery | choice none
 Retryability: Do not retry mutation; require bounded decision or strategic revision
 
-consume failure category `review-stale-head`
+rule symphony-reconcile-consume-failure-category-review-stale-head | when review-stale-head-category-is-evidenced | consume failure category `review-stale-head` | next review-stale-head-recovery | choice none
 Retryability: Do not retry the stale identity; create a new identity for the new head
 
-consume failure category `validation-timeout`
+rule symphony-reconcile-consume-failure-category-validation-timeout | when validation-timeout-category-is-evidenced | consume failure category `validation-timeout` | next validation-timeout-recovery | choice none
 Retryability: Terminate, clean up, and retry only within the unchanged-state budget
 
-emit failure category `capability-lost`
+rule symphony-reconcile-emit-failure-category-capability-lost | when capability-lost-category-is-evidenced | emit failure category `capability-lost` | next capability-lost-recovery | choice none
 
-consume failure category `capability-lost`
+rule symphony-reconcile-consume-failure-category-capability-lost | when capability-lost-category-is-evidenced | consume failure category `capability-lost` | next capability-lost-recovery | choice none
 Retryability: Pause dependent operations until capability changes
 
-emit failure category `cleanup-failed`
+rule symphony-reconcile-emit-failure-category-cleanup-failed | when cleanup-failed-category-is-evidenced | emit failure category `cleanup-failed` | next cleanup-failed-recovery | choice none
 
-consume failure category `cleanup-failed`
+rule symphony-reconcile-consume-failure-category-cleanup-failed | when cleanup-failed-category-is-evidenced | consume failure category `cleanup-failed` | next cleanup-failed-recovery | choice none
 Retryability: Retry only ownership-checked cleanup; blocks Symphony closeout
 
-emit failure category `permanent-invalid`
+rule symphony-reconcile-emit-failure-category-permanent-invalid | when permanent-invalid-category-is-evidenced | emit failure category `permanent-invalid` | next permanent-invalid-recovery | choice none
 
-consume failure category `permanent-invalid`
+rule symphony-reconcile-consume-failure-category-permanent-invalid | when permanent-invalid-category-is-evidenced | consume failure category `permanent-invalid` | next permanent-invalid-recovery | choice none
 Retryability: Do not retry unchanged state; require human correction

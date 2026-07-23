@@ -70,7 +70,7 @@ while IFS=$'\t' read -r case_id state category reads mutations events suppressed
   rows=$((rows + 1))
 done < "$fixture"
 
-[[ "$rows" -eq 32 ]] || fail "expected 32 failure-injection rows, got $rows"
+[[ "$rows" -eq 52 ]] || fail "expected 52 failure-injection rows, got $rows"
 
 # Fixture order and duplicate rows cannot affect the state-derived decision set.
 baseline=$(reduce_fixture_rows < "$fixture" | sort -u)
@@ -102,6 +102,18 @@ wrong_unapproved=$(expected_plan none dag-proposed,dag-approved \
   linear-create-missing-node dag-materialized none dag-materialized)
 [[ "$actual_unapproved" != "$wrong_unapproved" ]] ||
   fail "unapproved DAG incorrectly permits materialization"
+
+premature_edge=$(reduce_controller_state \
+  'surface=dag;approval=recorded;node=missing')
+premature_edge_mutations=$(awk -F'\t' \
+  '$1 == "allowed_mutations" { print $2 }' <<< "$premature_edge")
+[[ "$premature_edge_mutations" == "linear-create-missing-node" ]] ||
+  fail "missing DAG node permitted premature edge creation"
+
+premature_materialization=$(reduce_controller_state \
+  'surface=dag;approval=recorded;nodes=bound;edge=confirmed;edge_binding=missing')
+[[ "$premature_materialization" != *$'journal_events\tdag-materialized'* ]] ||
+  fail "missing edge binding permitted premature materialization"
 
 unsafe_attached=$(reduce_controller_state \
   'surface=cleanup;containment=proved;marker=match;attachment=attached-worktree;git_metadata=match;contents=expected')

@@ -60,11 +60,11 @@ Label selection is mandatory:
   requires migration/rollback/compatibility evidence. Add the security lens only
 when a trust boundary also applies.
 
-read label `maestro-risk-security`
+rule symphony-review-read-label-maestro-risk-security | when issue-label-or-changed-surface-has-security-risk | read label `maestro-risk-security` | next security-lens-selected | choice none
 
-read label `maestro-risk-infra`
+rule symphony-review-read-label-maestro-risk-infra | when issue-label-or-changed-surface-has-infrastructure-risk | read label `maestro-risk-infra` | next infrastructure-lens-selected | choice none
 
-read label `maestro-risk-migration`
+rule symphony-review-read-label-maestro-risk-migration | when issue-label-or-changed-surface-has-migration-risk | read label `maestro-risk-migration` | next migration-lenses-selected | choice none
 
 Infrastructure changes require the code reviewer to validate rendered artifacts
 with available domain tools and inspect the CI runtime toolchain. Absence of a
@@ -149,13 +149,13 @@ Missing required validation evidence or an unavailable required validator yields
 
 Return exactly the verdict selected by those conditions:
 
-return review verdict `pass`
+rule symphony-review-return-review-verdict-pass | when all-required-review-lenses-pass-with-evidence | return review verdict `pass` | next review-passed | choice review-verdict
 
-return review verdict `changes-required`
+rule symphony-review-return-review-verdict-changes-required | when confirmed-review-finding-requires-change | return review verdict `changes-required` | next review-changes-required | choice review-verdict
 
-return review verdict `human-decision`
+rule symphony-review-return-review-verdict-human-decision | when review-evidence-requires-bounded-or-strategic-decision | return review verdict `human-decision` | next review-human-decision | choice review-verdict
 
-return review verdict `inconclusive`
+rule symphony-review-return-review-verdict-inconclusive | when required-review-evidence-is-missing | return review verdict `inconclusive` | next review-inconclusive | choice review-verdict
 
 Repository CI, review, and merge gates are not prerequisites for a Symphony
 review `pass`. That verdict means Maestro's exact-SHA contextual review passed;
@@ -187,6 +187,11 @@ For `pass`, submit an approving review when the authenticated identity may do so
 If it cannot approve, post one top-level PR comment recording the passed Symphony
 review and exact SHA.
 
+Every formal review or fallback comment embeds
+`Maestro-Review-Action-Identity: <review action identity>`. Search that marker on
+the exact PR/head before publication and after an ambiguous response; suppress
+retry and Linear follow-up until exactly one canonical GitHub record is confirmed.
+
 For `changes-required`, submit one consolidated request-changes review when
 permitted; otherwise post the same content as one top-level PR comment. Each
 finding includes violated criterion/contract, location, evidence, and required
@@ -197,16 +202,20 @@ is the only implementation follow-up channel.
 
 After the canonical GitHub record is confirmed, add one Linear comment mentioning
 `@Cursor`, with the exact reviewed SHA, review/comment link, and concise numbered
-required outcomes. This Linear comment is the implementation follow-up channel.
+required outcomes. Embed
+`Maestro-Cursor-Follow-Up-Identity: <review action identity + linear-cursor-follow-up channel>`,
+search before create and after an ambiguous response, and link exactly one
+confirmed canonical GitHub record. This Linear comment is the implementation
+follow-up channel.
 
 For `human-decision`, publish a non-approving review/comment and record the
 prior/resume phase. Apply `maestro:scope-change` for a strategic contract/DAG
 revision or `maestro:needs-human` for a bounded decision. Do not mention `@Cursor`
 unless Cursor has a concrete implementation action.
 
-apply label `maestro:scope-change`
+rule symphony-review-apply-label-maestro-scope-change | when entity-scoped-strategic-drift-is-confirmed | apply label `maestro:scope-change` | next entity-scope-change | choice entity-phase
 
-apply label `maestro:needs-human`
+rule symphony-review-apply-label-maestro-needs-human | when entity-scoped-bounded-pause-is-confirmed | apply label `maestro:needs-human` | next entity-needs-human | choice entity-phase
 
 For `inconclusive`, publish only when the missing evidence itself requires action.
 Otherwise append `action-failed` and allow bounded retry.
@@ -218,13 +227,13 @@ exact SHA, outcome, evidence link, and next transition. Also append
 attempt, append `action-failed` with its finite failure category. Use
 `review-stale-head` and `cleanup-failed` only as declared by the core vocabulary.
 
-append event `review-recorded`
+rule symphony-review-append-event-review-recorded | when canonical-exact-head-review-record-is-confirmed | append event `review-recorded` | next review-gate-recorded | choice none
 
-append event `review-stale-head`
+rule symphony-review-append-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | append event `review-stale-head` | next review-new-head | choice none
 
-append event `human-decision-required`
+rule symphony-review-append-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | append event `human-decision-required` | next affected-subgraph-paused | choice none
 
-append event `action-failed`
+rule symphony-review-append-event-action-failed | when material-action-attempt-is-not-confirmed | append event `action-failed` | next bounded-recovery | choice none
 
 ## Cleanup guarantee
 
@@ -250,7 +259,7 @@ event once, retain the exact owned path, and retry only after a new safe observa
 
 Apply this attachment-state branch on success, failure, timeout, stale head, reviewer error, and publication failure.
 
-append event `cleanup-failed`
+rule symphony-review-append-event-cleanup-failed | when owned-cleanup-safety-or-completion-is-unconfirmed | append event `cleanup-failed` | next cleanup-debt | choice none
 
 Return to `symphony-reconcile`:
 
@@ -271,71 +280,71 @@ Next transition:
 Every review read, validation, publication, and cleanup attempt emits exactly one
 outcome and consumes it to choose the next transition:
 
-emit outcome `confirmed`
+rule symphony-review-emit-outcome-confirmed | when external-result-is-freshly-confirmed | emit outcome `confirmed` | next advance-confirmed-transition | choice action-outcome
 
-consume outcome `confirmed`
+rule symphony-review-consume-outcome-confirmed | when external-result-is-freshly-confirmed | consume outcome `confirmed` | next advance-confirmed-transition | choice action-outcome
 
-emit outcome `ambiguous`
+rule symphony-review-emit-outcome-ambiguous | when external-result-may-exist-without-confirmation | emit outcome `ambiguous` | next resolve-action-identity | choice action-outcome
 
-consume outcome `ambiguous`
+rule symphony-review-consume-outcome-ambiguous | when external-result-may-exist-without-confirmation | consume outcome `ambiguous` | next resolve-action-identity | choice action-outcome
 
-emit outcome `retryable-failure`
+rule symphony-review-emit-outcome-retryable-failure | when unchanged-state-permits-bounded-retry | emit outcome `retryable-failure` | next bounded-retry-with-phase-retained | choice action-outcome
 
-consume outcome `retryable-failure`
+rule symphony-review-consume-outcome-retryable-failure | when unchanged-state-permits-bounded-retry | consume outcome `retryable-failure` | next bounded-retry-with-phase-retained | choice action-outcome
 
-emit outcome `permanent-failure`
+rule symphony-review-emit-outcome-permanent-failure | when confirmed-invalid-state-or-capability-blocks-retry | emit outcome `permanent-failure` | next pause-affected-work | choice action-outcome
 
-consume outcome `permanent-failure`
+rule symphony-review-consume-outcome-permanent-failure | when confirmed-invalid-state-or-capability-blocks-retry | consume outcome `permanent-failure` | next pause-affected-work | choice action-outcome
 
 When the outcome requires a category, emit one applicable category and consume
 it with the adjacent retryability rule:
 
-emit failure category `observation-failed`
+rule symphony-review-emit-failure-category-observation-failed | when observation-failed-category-is-evidenced | emit failure category `observation-failed` | next observation-failed-recovery | choice none
 
-consume failure category `observation-failed`
+rule symphony-review-consume-failure-category-observation-failed | when observation-failed-category-is-evidenced | consume failure category `observation-failed` | next observation-failed-recovery | choice none
 Retryability: Retry the read later; authorize no dependent mutation
 
-emit failure category `observation-incomplete`
+rule symphony-review-emit-failure-category-observation-incomplete | when observation-incomplete-category-is-evidenced | emit failure category `observation-incomplete` | next observation-incomplete-recovery | choice none
 
-consume failure category `observation-incomplete`
+rule symphony-review-consume-failure-category-observation-incomplete | when observation-incomplete-category-is-evidenced | consume failure category `observation-incomplete` | next observation-incomplete-recovery | choice none
 Retryability: Resolve directly by native ID before retrying the dependent action
 
-emit failure category `external-transient`
+rule symphony-review-emit-failure-category-external-transient | when external-transient-category-is-evidenced | emit failure category `external-transient` | next external-transient-recovery | choice none
 
-consume failure category `external-transient`
+rule symphony-review-consume-failure-category-external-transient | when external-transient-category-is-evidenced | consume failure category `external-transient` | next external-transient-recovery | choice none
 Retryability: Retry the affected operation while unrelated work continues
 
-emit failure category `mutation-ambiguous`
+rule symphony-review-emit-failure-category-mutation-ambiguous | when mutation-ambiguous-category-is-evidenced | emit failure category `mutation-ambiguous` | next mutation-ambiguous-recovery | choice none
 
-consume failure category `mutation-ambiguous`
+rule symphony-review-consume-failure-category-mutation-ambiguous | when mutation-ambiguous-category-is-evidenced | consume failure category `mutation-ambiguous` | next mutation-ambiguous-recovery | choice none
 Retryability: Search by native target and action identity before any retry
 
-emit failure category `semantic-drift`
+rule symphony-review-emit-failure-category-semantic-drift | when semantic-drift-category-is-evidenced | emit failure category `semantic-drift` | next semantic-drift-recovery | choice none
 
-consume failure category `semantic-drift`
+rule symphony-review-consume-failure-category-semantic-drift | when semantic-drift-category-is-evidenced | consume failure category `semantic-drift` | next semantic-drift-recovery | choice none
 Retryability: Do not retry mutation; require bounded decision or strategic revision
 
-emit failure category `review-stale-head`
+rule symphony-review-emit-failure-category-review-stale-head | when review-stale-head-category-is-evidenced | emit failure category `review-stale-head` | next review-stale-head-recovery | choice none
 
-consume failure category `review-stale-head`
+rule symphony-review-consume-failure-category-review-stale-head | when review-stale-head-category-is-evidenced | consume failure category `review-stale-head` | next review-stale-head-recovery | choice none
 Retryability: Do not retry the stale identity; create a new identity for the new head
 
-emit failure category `validation-timeout`
+rule symphony-review-emit-failure-category-validation-timeout | when validation-timeout-category-is-evidenced | emit failure category `validation-timeout` | next validation-timeout-recovery | choice none
 
-consume failure category `validation-timeout`
+rule symphony-review-consume-failure-category-validation-timeout | when validation-timeout-category-is-evidenced | consume failure category `validation-timeout` | next validation-timeout-recovery | choice none
 Retryability: Terminate, clean up, and retry only within the unchanged-state budget
 
-emit failure category `capability-lost`
+rule symphony-review-emit-failure-category-capability-lost | when capability-lost-category-is-evidenced | emit failure category `capability-lost` | next capability-lost-recovery | choice none
 
-consume failure category `capability-lost`
+rule symphony-review-consume-failure-category-capability-lost | when capability-lost-category-is-evidenced | consume failure category `capability-lost` | next capability-lost-recovery | choice none
 Retryability: Pause dependent operations until capability changes
 
-emit failure category `cleanup-failed`
+rule symphony-review-emit-failure-category-cleanup-failed | when cleanup-failed-category-is-evidenced | emit failure category `cleanup-failed` | next cleanup-failed-recovery | choice none
 
-consume failure category `cleanup-failed`
+rule symphony-review-consume-failure-category-cleanup-failed | when cleanup-failed-category-is-evidenced | consume failure category `cleanup-failed` | next cleanup-failed-recovery | choice none
 Retryability: Retry only ownership-checked cleanup; blocks Symphony closeout
 
-emit failure category `permanent-invalid`
+rule symphony-review-emit-failure-category-permanent-invalid | when permanent-invalid-category-is-evidenced | emit failure category `permanent-invalid` | next permanent-invalid-recovery | choice none
 
-consume failure category `permanent-invalid`
+rule symphony-review-consume-failure-category-permanent-invalid | when permanent-invalid-category-is-evidenced | consume failure category `permanent-invalid` | next permanent-invalid-recovery | choice none
 Retryability: Do not retry unchanged state; require human correction

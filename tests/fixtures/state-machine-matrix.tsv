@@ -1,54 +1,56 @@
-kind	value	producers	consumers
-event	symphony-started	skills/symphony-start/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	discovery-recorded	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	discovery-completed	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	dag-proposed	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	dag-approved	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	dag-node-bound	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	dag-edge-bound	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	dag-materialized	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	semantic-drift-detected	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	issue-dispatched	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	review-recorded	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	review-stale-head	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	merge-observed	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	merge-reconciled	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	human-decision-required	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	follow-up-created	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	issue-cancelled	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	action-failed	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	retry-exhausted	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	cleanup-failed	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-event	symphony-completed	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md
-action-outcome	confirmed	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-action-outcome	ambiguous	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-action-outcome	retryable-failure	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-action-outcome	permanent-failure	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-failure-category	observation-failed	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-failure-category	observation-incomplete	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-failure-category	external-transient	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-failure-category	mutation-ambiguous	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-failure-category	semantic-drift	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-failure-category	review-stale-head	skills/symphony-review/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-failure-category	validation-timeout	skills/symphony-review/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-failure-category	capability-lost	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-failure-category	cleanup-failed	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-failure-category	permanent-invalid	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md
-role-label	maestro-symphony	skills/symphony-start/SKILL.md	skills/symphony-status/SKILL.md
-role-label	maestro-managed	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md
-phase-label	maestro:discovery	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md
-phase-label	maestro:planning	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md
-phase-label	maestro:executing	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md
-phase-label	maestro:needs-human	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md
-phase-label	maestro:scope-change	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md
-phase-label	maestro:complete	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md
-risk-label	maestro-risk-security	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-status/SKILL.md
-risk-label	maestro-risk-infra	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-status/SKILL.md
-risk-label	maestro-risk-migration	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-status/SKILL.md
-review-verdict	pass	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md
-review-verdict	changes-required	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md
-review-verdict	human-decision	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md
-review-verdict	inconclusive	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md
-reconciliation-verdict	complete	agents/implementation-reconciler.md	skills/symphony-reconcile/SKILL.md
-reconciliation-verdict	human-decision	agents/implementation-reconciler.md	skills/symphony-reconcile/SKILL.md
-reconciliation-verdict	inconclusive	agents/implementation-reconciler.md	skills/symphony-reconcile/SKILL.md
+kind	value	producers	consumers	predicate	next_state	choice_group
+event	symphony-started	skills/symphony-start/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	control-creation-is-confirmed	entity-discovery	none
+event	discovery-recorded	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	discovery-evidence-is-durably-confirmed	discovery-active	none
+event	discovery-completed	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	discovery-result-contract-is-confirmed	entity-complete	none
+event	dag-proposed	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	exact-dag-proposal-is-durably-confirmed	entity-planning	none
+event	dag-approved	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	exact-dag-revision-approval-is-durably-confirmed	dag-recovery	none
+event	dag-rejected	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	exact-dag-rejection-is-durably-confirmed	dag-replanning	none
+event	dag-node-bound	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	one-native-node-binding-is-confirmed	dag-recovery	none
+event	dag-edge-bound	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	one-native-edge-binding-is-confirmed	dag-recovery	none
+event	dag-materialized	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	all-native-bindings-and-events-are-confirmed	entity-executing	none
+event	semantic-drift-detected	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	normalized-contract-or-edge-drift-is-confirmed	affected-subgraph-paused	none
+event	issue-dispatched	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	cursor-delegation-is-freshly-confirmed	entity-executing	none
+event	review-recorded	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	canonical-exact-head-review-record-is-confirmed	review-gate-recorded	none
+event	review-stale-head	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	remote-pr-head-no-longer-matches-reviewed-head	review-new-head	none
+event	merge-observed	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	github-merge-sha-is-freshly-confirmed	merge-reconciliation-pending	none
+event	merge-reconciled	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	merge-reconciliation-is-complete-and-evidenced	implementation-complete	none
+event	human-decision-required	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	bounded-or-strategic-human-authority-is-required	affected-subgraph-paused	none
+event	decision-resolved	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	resolution-disposition-and-resume-evidence-are-confirmed	recorded-resume-phase	none
+event	follow-up-created	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	required-follow-up-identity-is-confirmed	follow-up-inventory-confirmed	none
+event	issue-cancelled	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	approved-cancellation-and-dependency-disposition-are-confirmed	implementation-complete	none
+event	action-failed	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	material-action-attempt-is-not-confirmed	bounded-recovery	none
+event	retry-exhausted	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	unchanged-state-retry-budget-is-exhausted	entity-needs-human	none
+event	cleanup-failed	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	owned-cleanup-safety-or-completion-is-unconfirmed	cleanup-debt	none
+event	symphony-completed	skills/symphony-reconcile/SKILL.md	skills/symphony-reconcile/SKILL.md;skills/symphony-status/SKILL.md	all-closeout-gates-and-final-outcome-are-confirmed	entity-complete	none
+action-outcome	confirmed	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	external-result-is-freshly-confirmed	advance-confirmed-transition	action-outcome
+action-outcome	ambiguous	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	external-result-may-exist-without-confirmation	resolve-action-identity	action-outcome
+action-outcome	retryable-failure	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	unchanged-state-permits-bounded-retry	bounded-retry-with-phase-retained	action-outcome
+action-outcome	permanent-failure	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	confirmed-invalid-state-or-capability-blocks-retry	pause-affected-work	action-outcome
+failure-category	observation-failed	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	observation-failed-category-is-evidenced	observation-failed-recovery	none
+failure-category	observation-incomplete	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	observation-incomplete-category-is-evidenced	observation-incomplete-recovery	none
+failure-category	external-transient	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	external-transient-category-is-evidenced	external-transient-recovery	none
+failure-category	mutation-ambiguous	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	mutation-ambiguous-category-is-evidenced	mutation-ambiguous-recovery	none
+failure-category	semantic-drift	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	semantic-drift-category-is-evidenced	semantic-drift-recovery	none
+failure-category	review-stale-head	skills/symphony-review/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	review-stale-head-category-is-evidenced	review-stale-head-recovery	none
+failure-category	validation-timeout	skills/symphony-review/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	validation-timeout-category-is-evidenced	validation-timeout-recovery	none
+failure-category	capability-lost	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	capability-lost-category-is-evidenced	capability-lost-recovery	none
+failure-category	cleanup-failed	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	cleanup-failed-category-is-evidenced	cleanup-failed-recovery	none
+failure-category	permanent-invalid	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-start/SKILL.md;skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	permanent-invalid-category-is-evidenced	permanent-invalid-recovery	none
+role-label	maestro-symphony	skills/symphony-start/SKILL.md	skills/symphony-status/SKILL.md	native-role-scope-is-confirmed	role-label-confirmed	none
+role-label	maestro-managed	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md	native-role-scope-is-confirmed	role-label-confirmed	none
+phase-label	maestro:discovery	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md	entity-scoped-discovery-authority-is-confirmed	entity-discovery	entity-phase
+phase-label	maestro:planning	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md	entity-scoped-planning-authority-is-confirmed	entity-planning	entity-phase
+phase-label	maestro:executing	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md	entity-scoped-execution-authority-is-confirmed	entity-executing	entity-phase
+phase-label	maestro:needs-human	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md	entity-scoped-bounded-pause-is-confirmed	entity-needs-human	entity-phase
+phase-label	maestro:scope-change	skills/symphony-review/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md	entity-scoped-strategic-drift-is-confirmed	entity-scope-change	entity-phase
+phase-label	maestro:complete	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-status/SKILL.md	entity-scoped-completion-authority-is-confirmed	entity-complete	entity-phase
+risk-label	maestro-risk-security	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-status/SKILL.md	issue-label-or-changed-surface-has-security-risk	security-lens-selected	none
+risk-label	maestro-risk-infra	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-status/SKILL.md	issue-label-or-changed-surface-has-infrastructure-risk	infrastructure-lens-selected	none
+risk-label	maestro-risk-migration	skills/symphony-start/SKILL.md;skills/symphony-reconcile/SKILL.md	skills/symphony-review/SKILL.md;skills/symphony-status/SKILL.md	issue-label-or-changed-surface-has-migration-risk	migration-lenses-selected	none
+review-verdict	pass	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md	all-required-review-lenses-pass-with-evidence	review-passed	review-verdict
+review-verdict	changes-required	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md	confirmed-review-finding-requires-change	review-changes-required	review-verdict
+review-verdict	human-decision	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md	review-evidence-requires-bounded-or-strategic-decision	review-human-decision	review-verdict
+review-verdict	inconclusive	skills/symphony-review/SKILL.md	skills/symphony-reconcile/SKILL.md	required-review-evidence-is-missing	review-inconclusive	review-verdict
+reconciliation-verdict	complete	agents/implementation-reconciler.md	skills/symphony-reconcile/SKILL.md	merge-reconciliation-is-complete-and-evidenced	implementation-complete	reconciliation-verdict
+reconciliation-verdict	human-decision	agents/implementation-reconciler.md	skills/symphony-reconcile/SKILL.md	merge-is-observed-but-acceptance-needs-decision	reconciliation-human-decision	reconciliation-verdict
+reconciliation-verdict	inconclusive	agents/implementation-reconciler.md	skills/symphony-reconcile/SKILL.md	merge-identity-or-acceptance-evidence-is-missing	reconciliation-inconclusive	reconciliation-verdict

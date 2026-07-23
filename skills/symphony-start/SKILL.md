@@ -63,7 +63,7 @@ Preserve the current native status unless a transition is unambiguous.
 If the current native status is terminal or cannot be interpreted unambiguously,
 append `human-decision-required` with the prior/resume phase; stop before discovery, planning, or materialization and request a user decision.
 
-append event `human-decision-required`
+rule symphony-start-append-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | append event `human-decision-required` | next affected-subgraph-paused | choice none
 
 Continue only after an explicit decision or a clearly permitted existing-workflow transition. Do not invent a Maestro status. Verify it is the intended Symphony before resuming.
 
@@ -71,27 +71,31 @@ Resume is journal-driven but provider-confirmed. Execute each applicable consume
 instruction while reconstructing the control, discovery, proposal, approval,
 binding, materialization, pause, and retry state:
 
-consume event `symphony-started`
+rule symphony-start-consume-event-symphony-started | when control-creation-is-confirmed | consume event `symphony-started` | next entity-discovery | choice none
 
-consume event `discovery-recorded`
+rule symphony-start-consume-event-discovery-recorded | when discovery-evidence-is-durably-confirmed | consume event `discovery-recorded` | next discovery-active | choice none
 
-consume event `discovery-completed`
+rule symphony-start-consume-event-discovery-completed | when discovery-result-contract-is-confirmed | consume event `discovery-completed` | next entity-complete | choice none
 
-consume event `dag-proposed`
+rule symphony-start-consume-event-dag-proposed | when exact-dag-proposal-is-durably-confirmed | consume event `dag-proposed` | next entity-planning | choice none
 
-consume event `dag-approved`
+rule symphony-start-consume-event-dag-approved | when exact-dag-revision-approval-is-durably-confirmed | consume event `dag-approved` | next dag-recovery | choice none
 
-consume event `dag-node-bound`
+rule symphony-start-consume-event-dag-rejected | when exact-dag-rejection-is-durably-confirmed | consume event `dag-rejected` | next dag-replanning | choice none
 
-consume event `dag-edge-bound`
+rule symphony-start-consume-event-dag-node-bound | when one-native-node-binding-is-confirmed | consume event `dag-node-bound` | next dag-recovery | choice none
 
-consume event `dag-materialized`
+rule symphony-start-consume-event-dag-edge-bound | when one-native-edge-binding-is-confirmed | consume event `dag-edge-bound` | next dag-recovery | choice none
 
-consume event `human-decision-required`
+rule symphony-start-consume-event-dag-materialized | when all-native-bindings-and-events-are-confirmed | consume event `dag-materialized` | next entity-executing | choice none
 
-consume event `action-failed`
+rule symphony-start-consume-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | consume event `human-decision-required` | next affected-subgraph-paused | choice none
 
-consume event `retry-exhausted`
+rule symphony-start-consume-event-decision-resolved | when resolution-disposition-and-resume-evidence-are-confirmed | consume event `decision-resolved` | next recorded-resume-phase | choice none
+
+rule symphony-start-consume-event-action-failed | when material-action-attempt-is-not-confirmed | consume event `action-failed` | next bounded-recovery | choice none
+
+rule symphony-start-consume-event-retry-exhausted | when unchanged-state-retry-budget-is-exhausted | consume event `retry-exhausted` | next entity-needs-human | choice none
 
 For a new goal:
 
@@ -108,11 +112,11 @@ For a new goal:
 4. Apply `maestro-symphony` and `maestro:discovery`.
 5. Append one `symphony-started` journal event.
 
-apply label `maestro-symphony`
+rule symphony-start-apply-label-maestro-symphony | when native-role-scope-is-confirmed | apply label `maestro-symphony` | next role-label-confirmed | choice none
 
-apply label `maestro:discovery`
+rule symphony-start-apply-label-maestro-discovery | when entity-scoped-discovery-authority-is-confirmed | apply label `maestro:discovery` | next entity-discovery | choice entity-phase
 
-append event `symphony-started`
+rule symphony-start-append-event-symphony-started | when control-creation-is-confirmed | append event `symphony-started` | next entity-discovery | choice none
 
 Ambiguous-create lookup uses `symphony-control-v1` and searches the same native
 target scope for the full embedded identity before retrying. The title may
@@ -130,12 +134,14 @@ For one bounded unknown, dispatch one `maestro:symphony-researcher` or
 `maestro:code-architect` with a complete assignment envelope and append
 `discovery-recorded` for the returned evidence.
 
-append event `discovery-recorded`
+rule symphony-start-append-event-discovery-recorded | when discovery-evidence-is-durably-confirmed | append event `discovery-recorded` | next discovery-active | choice none
 
 For heterogeneous or multi-repository discovery:
 
-1. Create idempotent discovery issues from the Discovery issue contract and apply
-   `maestro:discovery`.
+1. Create idempotent discovery issues from the Discovery issue contract. Derive
+   `Maestro-Discovery-Creation-Identity` from Symphony UUID + discovery revision + fixed discovery node/question key, embed it in the initial issue, and search
+   it before create and after an ambiguous create. Apply `maestro-managed` plus
+   `maestro:discovery`. The fixed approved/planned key is never model-random.
 2. Never delegate them to Cursor.
 3. Dispatch bounded `maestro:symphony-researcher` agents in parallel, subject to
    a maximum of three active research agents and one per repository.
@@ -148,9 +154,9 @@ For heterogeneous or multi-repository discovery:
 6. Represent unresolved uncertainty as a discovery or proof-of-concept gate; do
    not fabricate the rest of the DAG.
 
-append event `discovery-completed`
+rule symphony-start-append-event-discovery-completed | when discovery-result-contract-is-confirmed | append event `discovery-completed` | next entity-complete | choice none
 
-apply label `maestro:complete`
+rule symphony-start-apply-label-maestro-complete | when entity-scoped-completion-authority-is-confirmed | apply label `maestro:complete` | next entity-complete | choice entity-phase
 
 ## Plan the DAG revision
 
@@ -185,9 +191,9 @@ proposal action identity before retrying. Apply `maestro:planning` after the
 `dag-proposed` event is confirmed. Only then request explicit user approval and
 present:
 
-append event `dag-proposed`
+rule symphony-start-append-event-dag-proposed | when exact-dag-proposal-is-durably-confirmed | append event `dag-proposed` | next entity-planning | choice none
 
-apply label `maestro:planning`
+rule symphony-start-apply-label-maestro-planning | when entity-scoped-planning-authority-is-confirmed | apply label `maestro:planning` | next entity-planning | choice entity-phase
 
 ```markdown
 ## Proposed DAG revision
@@ -215,7 +221,14 @@ approval evidence, proposal action identity, and exact approved DAG
 revision/contract identity. Approval of another revision must not authorize this
 one.
 
-append event `dag-approved`
+rule symphony-start-append-event-dag-approved | when exact-dag-revision-approval-is-durably-confirmed | append event `dag-approved` | next dag-recovery | choice none
+
+If the user rejects the proposal, append `dag-rejected` with the Symphony UUID,
+exact rejected DAG/contract revision, proposal action identity, rejection evidence
+and rationale, and whether it is superseded or may be revised. Confirm the event
+before replanning; the rejected revision never authorizes materialization.
+
+rule symphony-start-append-event-dag-rejected | when exact-dag-rejection-is-durably-confirmed | append event `dag-rejected` | next dag-replanning | choice none
 
 ## Materialize the approved revision
 
@@ -236,7 +249,7 @@ After `dag-approved` is confirmed:
    `dag-node-bound`, mapping the fixed node key/action identity to the returned
    native Linear UUID and human key. Do not wait for other candidates.
 
-append event `dag-node-bound`
+rule symphony-start-append-event-dag-node-bound | when one-native-node-binding-is-confirmed | append event `dag-node-bound` | next dag-recovery | choice none
 
 6. Apply `maestro-managed`, `maestro:planning`, risk labels, and
    matching `repo:owner/repository`.
@@ -245,7 +258,7 @@ append event `dag-node-bound`
    fixed edge identity, native endpoint UUIDs, and native relation identity when
    available.
 
-append event `dag-edge-bound`
+rule symphony-start-append-event-dag-edge-bound | when one-native-edge-binding-is-confirmed | append event `dag-edge-bound` | next dag-recovery | choice none
 
 8. Do not add redundant `relatedTo` relations.
 9. Append `dag-materialized` only after every candidate and native relation is
@@ -253,84 +266,98 @@ append event `dag-edge-bound`
 10. Confirm `dag-materialized`, then transition the control issue from
     `maestro:planning` to `maestro:executing`.
 
-append event `dag-materialized`
+rule symphony-start-append-event-dag-materialized | when all-native-bindings-and-events-are-confirmed | append event `dag-materialized` | next entity-executing | choice none
+
+Perform only the first missing step in a pass: create one missing node and await
+confirmation; resolve an ambiguous node before any edge; append only its missing
+`dag-node-bound`; create one missing edge only after all nodes are bound; resolve
+an ambiguous edge before materialization; append only its missing
+`dag-edge-bound`; then append only `dag-materialized`. Never create a node and
+dependant edge in the same unconfirmed step.
+
+When a prior `human-decision-required` or `semantic-drift-detected` pause is
+resolved, confirm its finite disposition, governing revision, affected subgraph,
+required approval evidence, and recorded resume phase. Append `decision-resolved`
+before removing a pause label or restoring that phase.
+
+rule symphony-start-append-event-decision-resolved | when resolution-disposition-and-resume-evidence-are-confirmed | append event `decision-resolved` | next recorded-resume-phase | choice none
 
 For a non-confirmed material mutation, append `action-failed` with the finite
 outcome/category and retain the current entity phase. After the unchanged-state
 attempt limit, append `retry-exhausted` and apply `maestro:needs-human` with the
 prior/resume phase.
 
-apply label `maestro-managed`
+rule symphony-start-apply-label-maestro-managed | when native-role-scope-is-confirmed | apply label `maestro-managed` | next role-label-confirmed | choice none
 
-apply label `maestro-risk-security`
+rule symphony-start-apply-label-maestro-risk-security | when issue-label-or-changed-surface-has-security-risk | apply label `maestro-risk-security` | next security-lens-selected | choice none
 
-apply label `maestro-risk-infra`
+rule symphony-start-apply-label-maestro-risk-infra | when issue-label-or-changed-surface-has-infrastructure-risk | apply label `maestro-risk-infra` | next infrastructure-lens-selected | choice none
 
-apply label `maestro-risk-migration`
+rule symphony-start-apply-label-maestro-risk-migration | when issue-label-or-changed-surface-has-migration-risk | apply label `maestro-risk-migration` | next migration-lenses-selected | choice none
 
-apply label `maestro:executing`
+rule symphony-start-apply-label-maestro-executing | when entity-scoped-execution-authority-is-confirmed | apply label `maestro:executing` | next entity-executing | choice entity-phase
 
-append event `action-failed`
+rule symphony-start-append-event-action-failed | when material-action-attempt-is-not-confirmed | append event `action-failed` | next bounded-recovery | choice none
 
-append event `retry-exhausted`
+rule symphony-start-append-event-retry-exhausted | when unchanged-state-retry-budget-is-exhausted | append event `retry-exhausted` | next entity-needs-human | choice none
 
 ## Classify start and materialization attempts
 
 For every read or mutation attempted by this skill, execute exactly one outcome
 emission and consume it immediately to select the transition:
 
-emit outcome `confirmed`
+rule symphony-start-emit-outcome-confirmed | when external-result-is-freshly-confirmed | emit outcome `confirmed` | next advance-confirmed-transition | choice action-outcome
 
-consume outcome `confirmed`
+rule symphony-start-consume-outcome-confirmed | when external-result-is-freshly-confirmed | consume outcome `confirmed` | next advance-confirmed-transition | choice action-outcome
 
-emit outcome `ambiguous`
+rule symphony-start-emit-outcome-ambiguous | when external-result-may-exist-without-confirmation | emit outcome `ambiguous` | next resolve-action-identity | choice action-outcome
 
-consume outcome `ambiguous`
+rule symphony-start-consume-outcome-ambiguous | when external-result-may-exist-without-confirmation | consume outcome `ambiguous` | next resolve-action-identity | choice action-outcome
 
-emit outcome `retryable-failure`
+rule symphony-start-emit-outcome-retryable-failure | when unchanged-state-permits-bounded-retry | emit outcome `retryable-failure` | next bounded-retry-with-phase-retained | choice action-outcome
 
-consume outcome `retryable-failure`
+rule symphony-start-consume-outcome-retryable-failure | when unchanged-state-permits-bounded-retry | consume outcome `retryable-failure` | next bounded-retry-with-phase-retained | choice action-outcome
 
-emit outcome `permanent-failure`
+rule symphony-start-emit-outcome-permanent-failure | when confirmed-invalid-state-or-capability-blocks-retry | emit outcome `permanent-failure` | next pause-affected-work | choice action-outcome
 
-consume outcome `permanent-failure`
+rule symphony-start-consume-outcome-permanent-failure | when confirmed-invalid-state-or-capability-blocks-retry | consume outcome `permanent-failure` | next pause-affected-work | choice action-outcome
 
 When the outcome requires a category, emit one applicable category and consume
 it with the adjacent retryability rule:
 
-emit failure category `observation-failed`
+rule symphony-start-emit-failure-category-observation-failed | when observation-failed-category-is-evidenced | emit failure category `observation-failed` | next observation-failed-recovery | choice none
 
-consume failure category `observation-failed`
+rule symphony-start-consume-failure-category-observation-failed | when observation-failed-category-is-evidenced | consume failure category `observation-failed` | next observation-failed-recovery | choice none
 Retryability: Retry the read later; authorize no dependent mutation
 
-emit failure category `observation-incomplete`
+rule symphony-start-emit-failure-category-observation-incomplete | when observation-incomplete-category-is-evidenced | emit failure category `observation-incomplete` | next observation-incomplete-recovery | choice none
 
-consume failure category `observation-incomplete`
+rule symphony-start-consume-failure-category-observation-incomplete | when observation-incomplete-category-is-evidenced | consume failure category `observation-incomplete` | next observation-incomplete-recovery | choice none
 Retryability: Resolve directly by native ID before retrying the dependent action
 
-emit failure category `external-transient`
+rule symphony-start-emit-failure-category-external-transient | when external-transient-category-is-evidenced | emit failure category `external-transient` | next external-transient-recovery | choice none
 
-consume failure category `external-transient`
+rule symphony-start-consume-failure-category-external-transient | when external-transient-category-is-evidenced | consume failure category `external-transient` | next external-transient-recovery | choice none
 Retryability: Retry the affected operation while unrelated work continues
 
-emit failure category `mutation-ambiguous`
+rule symphony-start-emit-failure-category-mutation-ambiguous | when mutation-ambiguous-category-is-evidenced | emit failure category `mutation-ambiguous` | next mutation-ambiguous-recovery | choice none
 
-consume failure category `mutation-ambiguous`
+rule symphony-start-consume-failure-category-mutation-ambiguous | when mutation-ambiguous-category-is-evidenced | consume failure category `mutation-ambiguous` | next mutation-ambiguous-recovery | choice none
 Retryability: Search by native target and action identity before any retry
 
-emit failure category `semantic-drift`
+rule symphony-start-emit-failure-category-semantic-drift | when semantic-drift-category-is-evidenced | emit failure category `semantic-drift` | next semantic-drift-recovery | choice none
 
-consume failure category `semantic-drift`
+rule symphony-start-consume-failure-category-semantic-drift | when semantic-drift-category-is-evidenced | consume failure category `semantic-drift` | next semantic-drift-recovery | choice none
 Retryability: Do not retry mutation; require bounded decision or strategic revision
 
-emit failure category `capability-lost`
+rule symphony-start-emit-failure-category-capability-lost | when capability-lost-category-is-evidenced | emit failure category `capability-lost` | next capability-lost-recovery | choice none
 
-consume failure category `capability-lost`
+rule symphony-start-consume-failure-category-capability-lost | when capability-lost-category-is-evidenced | consume failure category `capability-lost` | next capability-lost-recovery | choice none
 Retryability: Pause dependent operations until capability changes
 
-emit failure category `permanent-invalid`
+rule symphony-start-emit-failure-category-permanent-invalid | when permanent-invalid-category-is-evidenced | emit failure category `permanent-invalid` | next permanent-invalid-recovery | choice none
 
-consume failure category `permanent-invalid`
+rule symphony-start-consume-failure-category-permanent-invalid | when permanent-invalid-category-is-evidenced | consume failure category `permanent-invalid` | next permanent-invalid-recovery | choice none
 Retryability: Do not retry unchanged state; require human correction
 
 Do not delegate implementation from this skill. End with the control issue,

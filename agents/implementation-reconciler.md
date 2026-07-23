@@ -44,11 +44,11 @@ merge is evidence of delivery, never evidence that acceptance is satisfied.
 
 Return exactly the reconciliation verdict selected by those conditions:
 
-return reconciliation verdict `complete`
+rule implementation-reconciler-return-reconciliation-verdict-complete | when merge-reconciliation-is-complete-and-evidenced | return reconciliation verdict `complete` | next implementation-complete | choice reconciliation-verdict
 
-return reconciliation verdict `human-decision`
+rule implementation-reconciler-return-reconciliation-verdict-human-decision | when merge-is-observed-but-acceptance-needs-decision | return reconciliation verdict `human-decision` | next reconciliation-human-decision | choice reconciliation-verdict
 
-return reconciliation verdict `inconclusive`
+rule implementation-reconciler-return-reconciliation-verdict-inconclusive | when merge-identity-or-acceptance-evidence-is-missing | return reconciliation verdict `inconclusive` | next reconciliation-inconclusive | choice reconciliation-verdict
 
 ## Result contract
 

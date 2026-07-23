@@ -164,6 +164,35 @@ reduce_controller_state() {
           "${predicate[action_identity]:-}" == "unresolved" ]]; then
     emit_action_plan mutation-ambiguous linear-action-identity-search none \
       action-failed repeat-create resolve-ambiguous-creation
+  elif [[ "${predicate[surface]:-}" == "linear" &&
+          "${predicate[record_family]:-}" == "discovery-issue" &&
+          "${predicate[create_outcome]:-}" == "ambiguous" &&
+          "${predicate[action_identity]:-}" == "stable" ]]; then
+    emit_action_plan mutation-ambiguous discovery-action-identity-search none \
+      action-failed repeat-create,dependent-mutation resolve-discovery-issue
+  elif [[ "${predicate[surface]:-}" == "linear" &&
+          "${predicate[record_family]:-}" == "required-follow-up" &&
+          "${predicate[create_outcome]:-}" == "ambiguous" &&
+          "${predicate[action_identity]:-}" == "stable" ]]; then
+    emit_action_plan mutation-ambiguous follow-up-action-identity-search none \
+      action-failed repeat-create,closeout resolve-required-follow-up
+  elif [[ "${predicate[surface]:-}" == "github" &&
+          "${predicate[record_family]:-}" == "github-review-record" &&
+          "${predicate[create_outcome]:-}" == "ambiguous" &&
+          "${predicate[action_identity]:-}" == "stable" &&
+          "${predicate[pr_head]:-}" == "exact" ]]; then
+    emit_action_plan mutation-ambiguous \
+      github-review-action-identity-search none action-failed \
+      repeat-publication,linear-cursor-follow-up \
+      resolve-canonical-github-record
+  elif [[ "${predicate[surface]:-}" == "linear" &&
+          "${predicate[record_family]:-}" == "linear-cursor-follow-up" &&
+          "${predicate[create_outcome]:-}" == "ambiguous" &&
+          "${predicate[action_identity]:-}" == "stable" &&
+          "${predicate[github_record]:-}" == "confirmed" ]]; then
+    emit_action_plan mutation-ambiguous \
+      linear-cursor-follow-up-identity-search none action-failed \
+      repeat-create,duplicate-follow-up resolve-linear-cursor-follow-up
   elif [[ "${predicate[surface]:-}" == "github" &&
           "${predicate[publication]:-}" == "pending" &&
           "${predicate[pr_head]:-}" == "stale" ]]; then
@@ -199,14 +228,120 @@ reduce_controller_state() {
     emit_action_plan none dag-proposed,dag-approved none none \
       dag-materialization awaiting-dag-approval
   elif [[ "${predicate[surface]:-}" == "dag" &&
+          "${predicate[proposal]:-}" == "recorded" &&
+          "${predicate[approval]:-}" == "rejected" &&
+          "${predicate[rejection_event]:-}" == "absent" ]]; then
+    emit_action_plan none \
+      dag-proposed,rejection-evidence,proposal-action-identity none \
+      dag-rejected dag-approval,dag-materialization \
+      replan-after-durable-rejection
+  elif [[ "${predicate[surface]:-}" == "dag" &&
+          "${predicate[proposal]:-}" == "recorded" &&
+          "${predicate[approval]:-}" == "rejected" &&
+          "${predicate[rejection_event]:-}" == "recorded" ]]; then
+    emit_action_plan none dag-proposed,dag-rejected none none \
+      dag-approval,dag-materialization rejected-revision-historical
+  elif [[ "${predicate[surface]:-}" == "dag" &&
           "${predicate[approval]:-}" == "recorded" &&
-          "${predicate[node_bindings]:-}" == "partial" &&
-          "${predicate[edge_bindings]:-}" == "partial" ]]; then
+          "${predicate[node]:-}" == "missing" ]]; then
+    emit_action_plan none \
+      dag-approved,dag-node-bound,native-node-identity \
+      linear-create-missing-node none \
+      linear-create-missing-edge,dag-node-bound,dag-edge-bound,dag-materialized \
+      await-node-confirmation
+  elif [[ "${predicate[surface]:-}" == "dag" &&
+          "${predicate[approval]:-}" == "recorded" &&
+          "${predicate[node]:-}" == "create-ambiguous" ]]; then
+    emit_action_plan mutation-ambiguous \
+      dag-approved,node-action-identity-search none action-failed \
+      linear-create-missing-node,linear-create-missing-edge,dag-node-bound,dag-edge-bound,dag-materialized \
+      resolve-node-identity
+  elif [[ "${predicate[surface]:-}" == "dag" &&
+          "${predicate[approval]:-}" == "recorded" &&
+          "${predicate[node]:-}" == "confirmed" &&
+          "${predicate[node_binding]:-}" == "missing" ]]; then
+    emit_action_plan none \
+      dag-approved,native-node,stable-node-action-identity none dag-node-bound \
+      linear-create-missing-node,linear-create-missing-edge,dag-edge-bound,dag-materialized \
+      await-node-binding-event
+  elif [[ "${predicate[surface]:-}" == "dag" &&
+          "${predicate[approval]:-}" == "recorded" &&
+          "${predicate[nodes]:-}" == "bound" &&
+          "${predicate[edge]:-}" == "missing" ]]; then
+    emit_action_plan none \
+      dag-approved,dag-node-bound,dag-edge-bound,native-node-bindings,native-edge-identity \
+      linear-create-missing-edge none \
+      linear-create-missing-node,dag-node-bound,dag-edge-bound,dag-materialized \
+      await-edge-confirmation
+  elif [[ "${predicate[surface]:-}" == "dag" &&
+          "${predicate[approval]:-}" == "recorded" &&
+          "${predicate[nodes]:-}" == "bound" &&
+          "${predicate[edge]:-}" == "create-ambiguous" ]]; then
+    emit_action_plan mutation-ambiguous \
+      dag-approved,dag-node-bound,native-edge-resolution none action-failed \
+      linear-create-missing-node,linear-create-missing-edge,dag-node-bound,dag-edge-bound,dag-materialized \
+      resolve-native-edge
+  elif [[ "${predicate[surface]:-}" == "dag" &&
+          "${predicate[approval]:-}" == "recorded" &&
+          "${predicate[nodes]:-}" == "bound" &&
+          "${predicate[edge]:-}" == "confirmed" &&
+          "${predicate[edge_binding]:-}" == "missing" ]]; then
+    emit_action_plan none \
+      dag-approved,dag-node-bound,native-edge,stable-edge-action-identity \
+      none dag-edge-bound \
+      linear-create-missing-node,linear-create-missing-edge,dag-node-bound,dag-materialized \
+      await-edge-binding-event
+  elif [[ "${predicate[surface]:-}" == "dag" &&
+          "${predicate[approval]:-}" == "recorded" &&
+          "${predicate[nodes]:-}" == "bound" &&
+          "${predicate[edges]:-}" == "bound" &&
+          "${predicate[materialization]:-}" == "missing" ]]; then
     emit_action_plan none \
       dag-approved,dag-node-bound,dag-edge-bound,native-bindings \
-      linear-create-missing-node,linear-create-missing-edge \
-      dag-node-bound,dag-edge-bound,dag-materialized \
-      recreate-bound-native-object dag-materialized
+      none dag-materialized \
+      linear-create-missing-node,linear-create-missing-edge,dag-node-bound,dag-edge-bound \
+      await-materialization-event
+  elif [[ "${predicate[surface]:-}" == "dag" &&
+          "${predicate[approval]:-}" == "recorded" &&
+          "${predicate[nodes]:-}" == "bound" &&
+          "${predicate[edges]:-}" == "bound" &&
+          "${predicate[materialization]:-}" == "recorded" ]]; then
+    emit_action_plan none \
+      dag-approved,dag-node-bound,dag-edge-bound,dag-materialized,native-bindings \
+      none none \
+      linear-create-missing-node,linear-create-missing-edge,dag-node-bound,dag-edge-bound,duplicate-dag-materialized \
+      materialized
+  elif [[ "${predicate[surface]:-}" == "pause" &&
+          "${predicate[pause_event]:-}" == "recorded" &&
+          "${predicate[resolution_event]:-}" == "absent" &&
+          "${predicate[disposition]:-}" == "absent" ]]; then
+    emit_action_plan none \
+      human-decision-required,semantic-drift-detected,native-phase none none \
+      remove-needs-human,remove-scope-change,resume-phase unresolved-pause
+  elif [[ "${predicate[surface]:-}" == "pause" &&
+          "${predicate[pause_event]:-}" == "recorded" &&
+          "${predicate[resolution_event]:-}" == "absent" &&
+          ( "${predicate[disposition]:-}" == "restore-approved-state" ||
+            "${predicate[disposition]:-}" == "accept-observed-as-revision" ||
+            "${predicate[disposition]:-}" == "revise-affected-wave" ) &&
+          "${predicate[approval_evidence]:-}" == "confirmed" &&
+          "${predicate[resume_phase]:-}" == "confirmed" ]]; then
+    emit_action_plan none \
+      pause-action-identity,governing-revision,affected-subgraph,approval-evidence,resume-phase \
+      none decision-resolved \
+      remove-needs-human,remove-scope-change,resume-phase \
+      await-resolution-event
+  elif [[ "${predicate[surface]:-}" == "pause" &&
+          "${predicate[pause_event]:-}" == "recorded" &&
+          "${predicate[resolution_event]:-}" == "recorded" &&
+          ( "${predicate[disposition]:-}" == "restore-approved-state" ||
+            "${predicate[disposition]:-}" == "accept-observed-as-revision" ||
+            "${predicate[disposition]:-}" == "revise-affected-wave" ) &&
+          "${predicate[approval_evidence]:-}" == "confirmed" &&
+          "${predicate[resume_phase]:-}" == "confirmed" ]]; then
+    emit_action_plan none decision-resolved,native-phase,affected-subgraph \
+      remove-pause-label,resume-recorded-phase none \
+      duplicate-decision-resolved resumed-recorded-phase
   elif [[ "${predicate[surface]:-}" == "reconciler" &&
           "${predicate[merge]:-}" == "observed" &&
           "${predicate[verdict]:-}" == "human-decision" ]]; then

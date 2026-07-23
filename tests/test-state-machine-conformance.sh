@@ -6,15 +6,11 @@ source tests/lib/assertions.sh
 
 matrix=tests/fixtures/state-machine-matrix.tsv
 core=references/symphony/core.md
-linear=references/symphony/linear.md
-start=skills/symphony-start/SKILL.md
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
 
 assert_exact_set() {
-  local expected=$1
-  local actual=$2
-  local description=$3
+  local expected=$1 actual=$2 description=$3
   sort -u "$expected" > "$tmp_dir/expected"
   sort -u "$actual" > "$tmp_dir/actual"
   if ! diff -u "$tmp_dir/expected" "$tmp_dir/actual"; then
@@ -28,18 +24,16 @@ matrix_values() {
 }
 
 assert_file "$matrix"
-expected_header=$'kind\tvalue\tproducers\tconsumers'
+expected_header=$'kind\tvalue\tproducers\tconsumers\tpredicate\tnext_state\tchoice_group'
 [[ "$(head -n 1 "$matrix")" == "$expected_header" ]] ||
   fail "unexpected state-machine matrix header"
 
-# Parse exact finite sets from the normative tables.
+# Exact finite values remain grounded in the normative protocol tables.
 awk '
   /^### Journal event types$/ { table = 1; next }
   table && /^### / { exit }
   table && /^\| `[a-z0-9-]+` / {
-    value = $2
-    gsub(/`/, "", value)
-    print value
+    value = $2; gsub(/`/, "", value); print value
   }
 ' "$core" > "$tmp_dir/normative-events"
 matrix_values event > "$tmp_dir/matrix-events"
@@ -50,40 +44,41 @@ awk '
   /^### Action outcomes$/ { table = 1; next }
   table && /^### / { exit }
   table && /^\| `[a-z0-9-]+` / {
-    value = $2
-    gsub(/`/, "", value)
-    print value
+    value = $2; gsub(/`/, "", value); print value
   }
 ' "$core" > "$tmp_dir/normative-action-outcomes"
 matrix_values action-outcome > "$tmp_dir/matrix-action-outcomes"
 assert_exact_set "$tmp_dir/matrix-action-outcomes" \
   "$tmp_dir/normative-action-outcomes" "action outcome"
 
+awk '
+  /^### Failure categories and retry behavior$/ { table = 1; next }
+  table && /^### / { exit }
+  table && /^\| `[a-z0-9-]+` / {
+    value = $2; gsub(/`/, "", value); print value
+  }
+' "$core" > "$tmp_dir/normative-failure-categories"
+matrix_values failure-category > "$tmp_dir/matrix-failure-categories"
+assert_exact_set "$tmp_dir/matrix-failure-categories" \
+  "$tmp_dir/normative-failure-categories" "failure category"
+
 awk -F'|' '
   /^### Failure categories and retry behavior$/ { table = 1; next }
   table && /^### / { exit }
   table && /^\| `[a-z0-9-]+` / {
-    value = $2
-    behavior = $3
+    value = $2; behavior = $3
     gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
     gsub(/^[[:space:]]+|[[:space:]]+$/, "", behavior)
     gsub(/`/, "", value)
     print value "\t" behavior
   }
 ' "$core" > "$tmp_dir/normative-failure-behavior"
-cut -f1 "$tmp_dir/normative-failure-behavior" > \
-  "$tmp_dir/normative-failure-categories"
-matrix_values failure-category > "$tmp_dir/matrix-failure-categories"
-assert_exact_set "$tmp_dir/matrix-failure-categories" \
-  "$tmp_dir/normative-failure-categories" "failure category"
 
 awk '
   /^### Verdict mapping$/ { table = 1; next }
   table && /^## / { exit }
   table && /^\| Review `/ {
-    value = $3
-    gsub(/`/, "", value)
-    print value
+    value = $3; gsub(/`/, "", value); print value
   }
 ' "$core" > "$tmp_dir/normative-review-verdicts"
 matrix_values review-verdict > "$tmp_dir/matrix-review-verdicts"
@@ -94,143 +89,160 @@ awk '
   /^### Verdict mapping$/ { table = 1; next }
   table && /^## / { exit }
   table && /^\| Reconciliation `/ {
-    value = $3
-    gsub(/`/, "", value)
-    print value
+    value = $3; gsub(/`/, "", value); print value
   }
 ' "$core" > "$tmp_dir/normative-reconciliation-verdicts"
 matrix_values reconciliation-verdict > "$tmp_dir/matrix-reconciliation-verdicts"
 assert_exact_set "$tmp_dir/matrix-reconciliation-verdicts" \
   "$tmp_dir/normative-reconciliation-verdicts" "reconciliation verdict"
 
-# Parse every declared Maestro label and the exact phase/risk subsets.
 awk '
   /^## Maestro labels$/ { labels = 1; next }
   labels && /^## / { exit }
   labels && /^maestro(:|-)[a-z]/ { print }
 ' "$core" > "$tmp_dir/normative-labels"
-for kind in role-label phase-label risk-label; do
-  matrix_values "$kind"
-done > "$tmp_dir/matrix-labels"
+for kind in role-label phase-label risk-label; do matrix_values "$kind"; done \
+  > "$tmp_dir/matrix-labels"
 assert_exact_set "$tmp_dir/matrix-labels" "$tmp_dir/normative-labels" \
   "Maestro label"
 
-awk -F'|' '
-  /^## Entity-scoped phase transitions$/ { table = 1; next }
-  table && /^## / { exit }
-  table && /^\| (Control|Discovery|Implementation) issue \| `maestro:/ {
-    value = $3
-    gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-    gsub(/`/, "", value)
-    print value
-  }
-' "$core" > "$tmp_dir/normative-phase-labels"
-matrix_values phase-label > "$tmp_dir/matrix-phase-labels"
-assert_exact_set "$tmp_dir/matrix-phase-labels" \
-  "$tmp_dir/normative-phase-labels" "phase label"
-
-awk '
-  /^## Maestro risk-label mapping$/ { table = 1; next }
-  table && /^## / { exit }
-  table && /^\| `maestro-risk-/ {
-    value = $2
-    gsub(/`/, "", value)
-    print value
-  }
-' "$core" > "$tmp_dir/normative-risk-labels"
-matrix_values risk-label > "$tmp_dir/matrix-risk-labels"
-assert_exact_set "$tmp_dir/matrix-risk-labels" \
-  "$tmp_dir/normative-risk-labels" "risk label"
-
-# The matrix indexes exact operational instructions, not detached declarations.
-while IFS=$'\t' read -r kind value producers consumers; do
+# Expand the matrix to one exact operational tuple per producer/consumer path.
+while IFS=$'\t' read -r kind value producers consumers predicate next choice; do
   [[ "$kind" == "kind" ]] && continue
-  [[ -n "$value" && -n "$producers" && -n "$consumers" ]] ||
-    fail "incomplete matrix row for $kind/$value"
+  [[ -n "$value" && -n "$producers" && -n "$consumers" &&
+     "$predicate" =~ ^[a-z0-9-]+$ && "$next" =~ ^[a-z0-9-]+$ &&
+     "$choice" =~ ^([a-z0-9-]+|none)$ ]] ||
+    fail "incomplete or non-normalized matrix row for $kind/$value"
   for direction in producer consumer; do
     paths=$producers
     [[ "$direction" == "consumer" ]] && paths=$consumers
     while IFS= read -r path; do
-      printf '%s|%s|%s|%s\n' "$kind" "$value" "$direction" "$path"
+      printf '%s|%s|%s|%s|%s|%s|%s\n' \
+        "$kind" "$value" "$direction" "$path" "$predicate" "$next" "$choice"
     done < <(tr ';' '\n' <<< "$paths")
   done
-done < "$matrix" > "$tmp_dir/matrix-edges"
+done < "$matrix" > "$tmp_dir/matrix-rules"
 
-event_producer='^append event `([a-z0-9-]+)`$'
-event_consumer='^consume event `([a-z0-9-]+)`$'
-outcome_producer='^emit outcome `([a-z0-9-]+)`$'
-outcome_consumer='^consume outcome `([a-z0-9-]+)`$'
-failure_producer='^emit failure category `([a-z0-9-]+)`$'
-failure_consumer='^consume failure category `([a-z0-9-]+)`$'
-label_producer='^apply label `([a-z0-9:-]+)`$'
-label_consumer='^read label `([a-z0-9:-]+)`$'
-review_producer='^return review verdict `([a-z0-9-]+)`$'
-review_consumer='^consume review verdict `([a-z0-9-]+)`$'
-reconciliation_producer='^return reconciliation verdict `([a-z0-9-]+)`$'
-reconciliation_consumer='^consume reconciliation verdict `([a-z0-9-]+)`$'
-
+# Parse only the standardized conditional grammar. Every rule has a unique ID,
+# observable normalized predicate, action, next state, and exclusivity group.
 for path in skills/symphony-*/SKILL.md agents/*.md; do
-  while IFS= read -r line; do
-    if [[ "$line" =~ $event_producer ]]; then
-      printf 'event|%s|producer|%s\n' "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $event_consumer ]]; then
-      printf 'event|%s|consumer|%s\n' "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $outcome_producer ]]; then
-      printf 'action-outcome|%s|producer|%s\n' "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $outcome_consumer ]]; then
-      printf 'action-outcome|%s|consumer|%s\n' "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $failure_producer ]]; then
-      printf 'failure-category|%s|producer|%s\n' "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $failure_consumer ]]; then
-      printf 'failure-category|%s|consumer|%s\n' "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $label_producer ]]; then
-      case "${BASH_REMATCH[1]}" in
-        maestro-symphony|maestro-managed) kind=role-label ;;
-        maestro:*) kind=phase-label ;;
-        maestro-risk-*) kind=risk-label ;;
-        *) fail "unknown label grammar value ${BASH_REMATCH[1]} in $path" ;;
-      esac
-      printf '%s|%s|producer|%s\n' "$kind" "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $label_consumer ]]; then
-      case "${BASH_REMATCH[1]}" in
-        maestro-symphony|maestro-managed) kind=role-label ;;
-        maestro:*) kind=phase-label ;;
-        maestro-risk-*) kind=risk-label ;;
-        *) fail "unknown label grammar value ${BASH_REMATCH[1]} in $path" ;;
-      esac
-      printf '%s|%s|consumer|%s\n' "$kind" "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $review_producer ]]; then
-      printf 'review-verdict|%s|producer|%s\n' "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $review_consumer ]]; then
-      printf 'review-verdict|%s|consumer|%s\n' "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $reconciliation_producer ]]; then
-      printf 'reconciliation-verdict|%s|producer|%s\n' \
-        "${BASH_REMATCH[1]}" "$path"
-    elif [[ "$line" =~ $reconciliation_consumer ]]; then
-      printf 'reconciliation-verdict|%s|consumer|%s\n' \
-        "${BASH_REMATCH[1]}" "$path"
-    fi
-  done < "$path"
-done > "$tmp_dir/operational-edges"
-assert_exact_set "$tmp_dir/matrix-edges" "$tmp_dir/operational-edges" \
-  "operational producer/consumer path edge"
+  awk -F' \\| ' -v path="$path" '
+    function fail_rule(message) {
+      print message > "/dev/stderr"
+      invalid = 1
+    }
+    /^rule / {
+      if (NF != 5 || $1 !~ /^rule [a-z0-9-]+$/ ||
+          $2 !~ /^when [a-z0-9-]+$/ ||
+          $4 !~ /^next [a-z0-9-]+$/ ||
+          $5 !~ /^choice ([a-z0-9-]+|none)$/) {
+        fail_rule("invalid conditional rule grammar in " path ": " $0)
+        next
+      }
+      rule = $1; sub(/^rule /, "", rule)
+      predicate = $2; sub(/^when /, "", predicate)
+      action = $3
+      next_state = $4; sub(/^next /, "", next_state)
+      choice = $5; sub(/^choice /, "", choice)
+      if (seen[rule]++) fail_rule("duplicate rule identifier in " path ": " rule)
 
-# Each failure consumer carries the normative retryability rule as adjacent
-# operational evidence, so retry behavior cannot drift from the finite table.
+      direction = ""
+      if (action ~ /^append event `/) {
+        kind = "event"; direction = "producer"; prefix = "append event `"
+      } else if (action ~ /^consume event `/) {
+        kind = "event"; direction = "consumer"; prefix = "consume event `"
+      } else if (action ~ /^emit outcome `/) {
+        kind = "action-outcome"; direction = "producer"; prefix = "emit outcome `"
+      } else if (action ~ /^consume outcome `/) {
+        kind = "action-outcome"; direction = "consumer"; prefix = "consume outcome `"
+      } else if (action ~ /^emit failure category `/) {
+        kind = "failure-category"; direction = "producer"; prefix = "emit failure category `"
+      } else if (action ~ /^consume failure category `/) {
+        kind = "failure-category"; direction = "consumer"; prefix = "consume failure category `"
+      } else if (action ~ /^apply label `/) {
+        value = action; sub(/^apply label `/, "", value); sub(/`$/, "", value)
+        direction = "producer"; prefix = "apply label `"
+        if (value == "maestro-symphony" || value == "maestro-managed")
+          kind = "role-label"
+        else if (value ~ /^maestro:/) kind = "phase-label"
+        else if (value ~ /^maestro-risk-/) kind = "risk-label"
+        else fail_rule("unknown label in " path ": " value)
+      } else if (action ~ /^read label `/) {
+        value = action; sub(/^read label `/, "", value); sub(/`$/, "", value)
+        direction = "consumer"; prefix = "read label `"
+        if (value == "maestro-symphony" || value == "maestro-managed")
+          kind = "role-label"
+        else if (value ~ /^maestro:/) kind = "phase-label"
+        else if (value ~ /^maestro-risk-/) kind = "risk-label"
+        else fail_rule("unknown label in " path ": " value)
+      } else if (action ~ /^return review verdict `/) {
+        kind = "review-verdict"; direction = "producer"
+        prefix = "return review verdict `"
+      } else if (action ~ /^consume review verdict `/) {
+        kind = "review-verdict"; direction = "consumer"
+        prefix = "consume review verdict `"
+      } else if (action ~ /^return reconciliation verdict `/) {
+        kind = "reconciliation-verdict"; direction = "producer"
+        prefix = "return reconciliation verdict `"
+      } else if (action ~ /^consume reconciliation verdict `/) {
+        kind = "reconciliation-verdict"; direction = "consumer"
+        prefix = "consume reconciliation verdict `"
+      } else {
+        fail_rule("unknown operational action in " path ": " action)
+        next
+      }
+      if (value == "") {
+        value = action; sub("^" prefix, "", value); sub(/`$/, "", value)
+      }
+      if (value !~ /^[a-z0-9:-]+$/)
+        fail_rule("non-normalized action value in " path ": " value)
+      if (choice != "none") {
+        key = choice SUBSEP direction SUBSEP predicate
+        if (exclusive[key]++)
+          fail_rule("duplicate predicate in exclusive group " choice ": " predicate)
+        if (predicate == "always" || predicate == "unconditional")
+          fail_rule("unconditional predicate in exclusive group " choice)
+      }
+      print kind "|" value "|" direction "|" path "|" predicate "|" next_state "|" choice
+      value = ""
+    }
+    END { if (invalid) exit 1 }
+  ' "$path"
+done > "$tmp_dir/operational-rules" ||
+  fail "conditional operational grammar validation failed"
+
+awk -F' \\| ' '/^rule / {
+  rule = $1
+  sub(/^rule /, "", rule)
+  print rule
+}' skills/symphony-*/SKILL.md agents/*.md | sort | uniq -d \
+  > "$tmp_dir/duplicate-rule-identifiers"
+[[ ! -s "$tmp_dir/duplicate-rule-identifiers" ]] ||
+  fail "duplicate global rule identifier: $(head -n 1 "$tmp_dir/duplicate-rule-identifiers")"
+
+# Naked operational commands are always invalid.
+if rg -n '^[[:space:]]*(append event|consume event|emit outcome|consume outcome|emit failure category|consume failure category|apply label|read label|return (review|reconciliation) verdict|consume (review|reconciliation) verdict) `' \
+  skills/symphony-*/SKILL.md agents/*.md > "$tmp_dir/naked"; then
+  fail "naked operational command remains: $(head -n 1 "$tmp_dir/naked")"
+fi
+
+assert_exact_set "$tmp_dir/matrix-rules" "$tmp_dir/operational-rules" \
+  "predicate-bearing operational rule"
+
+# Preserve the approved retry contract: every failure consumer carries its exact
+# normative retryability behavior immediately after the conditional rule.
 while IFS=$'\t' read -r category behavior; do
   awk -F'|' -v category="$category" \
     '$1 == "failure-category" && $2 == category && $3 == "consumer" {
-      print $4
-    }' "$tmp_dir/matrix-edges" | while IFS= read -r path; do
-    printf '%s|%s|%s\n' "$category" "$behavior" "$path"
-  done
-done < "$tmp_dir/normative-failure-behavior" > \
-  "$tmp_dir/expected-failure-consumer-evidence"
+      print category "|" behavior "|" $4
+    }' behavior="$behavior" "$tmp_dir/matrix-rules"
+done < "$tmp_dir/normative-failure-behavior" \
+  > "$tmp_dir/expected-failure-consumer-evidence"
 
 for path in skills/symphony-*/SKILL.md agents/*.md; do
-  awk -v path="$path" '
-    /^consume failure category `[a-z0-9-]+`$/ {
-      category = $0
+  awk -F' \\| ' -v path="$path" '
+    /^rule .* \| when [a-z0-9-]+ \| consume failure category `[a-z0-9-]+` \|/ {
+      category = $3
       sub(/^consume failure category `/, "", category)
       sub(/`$/, "", category)
       if ((getline evidence) <= 0 || evidence !~ /^Retryability: /) {
@@ -246,53 +258,91 @@ assert_exact_set "$tmp_dir/expected-failure-consumer-evidence" \
   "$tmp_dir/actual-failure-consumer-evidence" \
   "failure-category retryability evidence"
 
+# Every exclusive predicate/action/value/next/group tuple is declared by the
+# normative protocol, including phase and verdict transitions.
+awk -F'|' '{
+  print $1 "|" $2 "|" $3 "|" $5 "|" $6 "|" $7
+}' "$tmp_dir/operational-rules" | sort -u > "$tmp_dir/actual-allowed"
+awk -F'|' '
+  /^### Allowed predicate-to-transition sets$/ { table = 1; next }
+  table && /^## / { exit }
+  table && /^\| `[a-z0-9-]+` / {
+    for (i = 2; i <= 7; i++) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
+      gsub(/`/, "", $i)
+    }
+    if ($4 == "both") {
+      print $2 "|" $3 "|producer|" $5 "|" $6 "|" $7
+      print $2 "|" $3 "|consumer|" $5 "|" $6 "|" $7
+    } else {
+      print $2 "|" $3 "|" $4 "|" $5 "|" $6 "|" $7
+    }
+  }
+' "$core" > "$tmp_dir/normative-allowed"
+assert_exact_set "$tmp_dir/normative-allowed" "$tmp_dir/actual-allowed" \
+  "normative allowed transition"
+
 for path in references/symphony/*.md skills/symphony-*/SKILL.md agents/*.md \
   README.md; do
   assert_not_contains "$path" '^maestro-.*-(producer|consumer): '
-done
-
-# One fixed control contract revision governs persistence and both lookup paths.
-for path in "$core" "$linear" "$start"; do
-  assert_contains "$path" 'Control contract revision:[[:space:]]*`symphony-control-v1`'
-done
-assert_contains "$start" 'Pre-create lookup.*`symphony-control-v1`'
-assert_contains "$start" 'Ambiguous-create lookup.*`symphony-control-v1`'
-assert_contains "$start" 'fourth JSON array item.*`symphony-control-v1`'
-assert_contains "$start" 'persist.*`symphony-control-v1`'
-assert_contains "$start" 'must not select.*revision'
-
-for path in references/symphony/*.md skills/symphony-*/SKILL.md agents/*.md \
-  README.md; do
   assert_not_contains "$path" 'dag-approved-and-materialized'
 done
 
-# Prove both directions: an undeclared actual emission and a missing real
-# partial-recovery consumer edge must each be rejected.
+# The fixed control identity remains invariant across persistence and both lookup
+# paths; Final Fix C must not loosen approved Fix A behavior.
+for path in references/symphony/core.md references/symphony/linear.md \
+  skills/symphony-start/SKILL.md; do
+  assert_contains "$path" 'Control contract revision:[[:space:]]*`symphony-control-v1`'
+done
+assert_contains skills/symphony-start/SKILL.md \
+  'Pre-create lookup.*`symphony-control-v1`'
+assert_contains skills/symphony-start/SKILL.md \
+  'Ambiguous-create lookup.*`symphony-control-v1`'
+assert_contains skills/symphony-start/SKILL.md \
+  'fourth JSON array item.*`symphony-control-v1`'
+assert_contains skills/symphony-start/SKILL.md 'must not select.*revision'
+
 if [[ "${STATE_MACHINE_CONFORMANCE_SKIP_MUTATIONS:-0}" != 1 ]]; then
   mutation_root="$tmp_dir/mutations"
-  mkdir -p "$mutation_root/injected" "$mutation_root/removed"
-  cp -R agents references skills tests README.md "$mutation_root/injected/"
-  cp -R agents references skills tests README.md "$mutation_root/removed/"
+  for variant in naked wrong-predicate coherent-undeclared duplicate-always undeclared \
+    phase-outside verdict-outside; do
+    mkdir -p "$mutation_root/$variant"
+    cp -R agents references skills tests README.md "$mutation_root/$variant/"
+  done
 
-  printf '\nappend event `undeclared-injected-event`\n' >> \
-    "$mutation_root/injected/skills/symphony-start/SKILL.md"
-  if (
-    cd "$mutation_root/injected"
-    STATE_MACHINE_CONFORMANCE_SKIP_MUTATIONS=1 \
-      tests/test-state-machine-conformance.sh >/dev/null 2>&1
-  ); then
-    fail "undeclared actual event emission mutation was accepted"
-  fi
+  printf '\n  append event `symphony-started`\n' >> \
+    "$mutation_root/naked/skills/symphony-start/SKILL.md"
+  sed -i '0,/when control-creation-is-confirmed/s//when dag-revision-is-approved/' \
+    "$mutation_root/wrong-predicate/skills/symphony-start/SKILL.md"
+  sed -i 's/exact-dag-proposal-is-durably-confirmed/incorrect-but-normalized-predicate/g' \
+    "$mutation_root/coherent-undeclared/skills/symphony-start/SKILL.md" \
+    "$mutation_root/coherent-undeclared/skills/symphony-reconcile/SKILL.md" \
+    "$mutation_root/coherent-undeclared/skills/symphony-status/SKILL.md" \
+    "$mutation_root/coherent-undeclared/tests/fixtures/state-machine-matrix.tsv"
+  printf '\nrule injected-always-a | when always | return review verdict `pass` | next review-passed | choice review-verdict\nrule injected-always-b | when always | return review verdict `changes-required` | next review-changes-required | choice review-verdict\n' >> \
+    "$mutation_root/duplicate-always/agents/implementation-reconciler.md"
+  printf '\nrule injected-event | when injected-evidence-is-confirmed | append event `undeclared-injected-event` | next injected | choice none\n' >> \
+    "$mutation_root/undeclared/skills/symphony-start/SKILL.md"
 
-  sed -i '/^consume event `dag-approved`$/d' \
-    "$mutation_root/removed/skills/symphony-start/SKILL.md"
-  if (
-    cd "$mutation_root/removed"
-    STATE_MACHINE_CONFORMANCE_SKIP_MUTATIONS=1 \
-      tests/test-state-machine-conformance.sh >/dev/null 2>&1
-  ); then
-    fail "removed start partial-recovery consumer mutation was accepted"
-  fi
+  sed -i '0,/next entity-complete/s//next entity-executing/' \
+    "$mutation_root/phase-outside/skills/symphony-start/SKILL.md"
+  sed -i 's/entity-complete/entity-executing/' \
+    "$mutation_root/phase-outside/tests/fixtures/state-machine-matrix.tsv"
+  sed -i '0,/next review-passed/s//next review-inconclusive/' \
+    "$mutation_root/verdict-outside/skills/symphony-review/SKILL.md"
+  sed -i '/^review-verdict\tpass\t/s/review-passed/review-inconclusive/' \
+    "$mutation_root/verdict-outside/tests/fixtures/state-machine-matrix.tsv"
+
+  for variant in naked wrong-predicate coherent-undeclared duplicate-always undeclared \
+    phase-outside verdict-outside; do
+    if (
+      cd "$mutation_root/$variant"
+      STATE_MACHINE_CONFORMANCE_SKIP_MUTATIONS=1 \
+        tests/test-state-machine-conformance.sh >/dev/null 2>&1
+    ); then
+      fail "$variant conditional-grammar mutation was accepted"
+    fi
+  done
 fi
 
-pass "operational Symphony state-machine conformance and mutations"
+pass "conditional Symphony state-machine conformance and mutations"

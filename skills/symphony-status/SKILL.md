@@ -30,71 +30,75 @@ Never treat a journal/orchestration comment or prior summary as a private author
 Consume each event kind present in the journal while building the report, without
 treating it as proof until provider state confirms its claim:
 
-consume event `symphony-started`
+rule symphony-status-consume-event-symphony-started | when control-creation-is-confirmed | consume event `symphony-started` | next entity-discovery | choice none
 
-consume event `discovery-recorded`
+rule symphony-status-consume-event-discovery-recorded | when discovery-evidence-is-durably-confirmed | consume event `discovery-recorded` | next discovery-active | choice none
 
-consume event `discovery-completed`
+rule symphony-status-consume-event-discovery-completed | when discovery-result-contract-is-confirmed | consume event `discovery-completed` | next entity-complete | choice none
 
-consume event `dag-proposed`
+rule symphony-status-consume-event-dag-proposed | when exact-dag-proposal-is-durably-confirmed | consume event `dag-proposed` | next entity-planning | choice none
 
-consume event `dag-approved`
+rule symphony-status-consume-event-dag-approved | when exact-dag-revision-approval-is-durably-confirmed | consume event `dag-approved` | next dag-recovery | choice none
 
-consume event `dag-node-bound`
+rule symphony-status-consume-event-dag-rejected | when exact-dag-rejection-is-durably-confirmed | consume event `dag-rejected` | next dag-replanning | choice none
 
-consume event `dag-edge-bound`
+rule symphony-status-consume-event-dag-node-bound | when one-native-node-binding-is-confirmed | consume event `dag-node-bound` | next dag-recovery | choice none
 
-consume event `dag-materialized`
+rule symphony-status-consume-event-dag-edge-bound | when one-native-edge-binding-is-confirmed | consume event `dag-edge-bound` | next dag-recovery | choice none
 
-consume event `semantic-drift-detected`
+rule symphony-status-consume-event-dag-materialized | when all-native-bindings-and-events-are-confirmed | consume event `dag-materialized` | next entity-executing | choice none
 
-consume event `issue-dispatched`
+rule symphony-status-consume-event-semantic-drift-detected | when normalized-contract-or-edge-drift-is-confirmed | consume event `semantic-drift-detected` | next affected-subgraph-paused | choice none
 
-consume event `review-recorded`
+rule symphony-status-consume-event-issue-dispatched | when cursor-delegation-is-freshly-confirmed | consume event `issue-dispatched` | next entity-executing | choice none
 
-consume event `review-stale-head`
+rule symphony-status-consume-event-review-recorded | when canonical-exact-head-review-record-is-confirmed | consume event `review-recorded` | next review-gate-recorded | choice none
 
-consume event `merge-observed`
+rule symphony-status-consume-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | consume event `review-stale-head` | next review-new-head | choice none
 
-consume event `merge-reconciled`
+rule symphony-status-consume-event-merge-observed | when github-merge-sha-is-freshly-confirmed | consume event `merge-observed` | next merge-reconciliation-pending | choice none
 
-consume event `human-decision-required`
+rule symphony-status-consume-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | consume event `merge-reconciled` | next implementation-complete | choice none
 
-consume event `follow-up-created`
+rule symphony-status-consume-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | consume event `human-decision-required` | next affected-subgraph-paused | choice none
 
-consume event `issue-cancelled`
+rule symphony-status-consume-event-decision-resolved | when resolution-disposition-and-resume-evidence-are-confirmed | consume event `decision-resolved` | next recorded-resume-phase | choice none
 
-consume event `action-failed`
+rule symphony-status-consume-event-follow-up-created | when required-follow-up-identity-is-confirmed | consume event `follow-up-created` | next follow-up-inventory-confirmed | choice none
 
-consume event `retry-exhausted`
+rule symphony-status-consume-event-issue-cancelled | when approved-cancellation-and-dependency-disposition-are-confirmed | consume event `issue-cancelled` | next implementation-complete | choice none
 
-consume event `cleanup-failed`
+rule symphony-status-consume-event-action-failed | when material-action-attempt-is-not-confirmed | consume event `action-failed` | next bounded-recovery | choice none
 
-consume event `symphony-completed`
+rule symphony-status-consume-event-retry-exhausted | when unchanged-state-retry-budget-is-exhausted | consume event `retry-exhausted` | next entity-needs-human | choice none
+
+rule symphony-status-consume-event-cleanup-failed | when owned-cleanup-safety-or-completion-is-unconfirmed | consume event `cleanup-failed` | next cleanup-debt | choice none
+
+rule symphony-status-consume-event-symphony-completed | when all-closeout-gates-and-final-outcome-are-confirmed | consume event `symphony-completed` | next entity-complete | choice none
 
 Read the exact role, entity phase, and risk labels before interpreting them:
 
-read label `maestro-symphony`
+rule symphony-status-read-label-maestro-symphony | when native-role-scope-is-confirmed | read label `maestro-symphony` | next role-label-confirmed | choice none
 
-read label `maestro-managed`
+rule symphony-status-read-label-maestro-managed | when native-role-scope-is-confirmed | read label `maestro-managed` | next role-label-confirmed | choice none
 
-read label `maestro:discovery`
+rule symphony-status-read-label-maestro-discovery | when entity-scoped-discovery-authority-is-confirmed | read label `maestro:discovery` | next entity-discovery | choice entity-phase
 
-read label `maestro:planning`
+rule symphony-status-read-label-maestro-planning | when entity-scoped-planning-authority-is-confirmed | read label `maestro:planning` | next entity-planning | choice entity-phase
 
-read label `maestro:executing`
+rule symphony-status-read-label-maestro-executing | when entity-scoped-execution-authority-is-confirmed | read label `maestro:executing` | next entity-executing | choice entity-phase
 
-read label `maestro:needs-human`
+rule symphony-status-read-label-maestro-needs-human | when entity-scoped-bounded-pause-is-confirmed | read label `maestro:needs-human` | next entity-needs-human | choice entity-phase
 
-read label `maestro:scope-change`
+rule symphony-status-read-label-maestro-scope-change | when entity-scoped-strategic-drift-is-confirmed | read label `maestro:scope-change` | next entity-scope-change | choice entity-phase
 
-read label `maestro:complete`
+rule symphony-status-read-label-maestro-complete | when entity-scoped-completion-authority-is-confirmed | read label `maestro:complete` | next entity-complete | choice entity-phase
 
-read label `maestro-risk-security`
+rule symphony-status-read-label-maestro-risk-security | when issue-label-or-changed-surface-has-security-risk | read label `maestro-risk-security` | next security-lens-selected | choice none
 
-read label `maestro-risk-infra`
+rule symphony-status-read-label-maestro-risk-infra | when issue-label-or-changed-surface-has-infrastructure-risk | read label `maestro-risk-infra` | next infrastructure-lens-selected | choice none
 
-read label `maestro-risk-migration`
+rule symphony-status-read-label-maestro-risk-migration | when issue-label-or-changed-surface-has-migration-risk | read label `maestro-risk-migration` | next migration-lenses-selected | choice none
 
 If a current object or field is partial, omitted, inaccessible, or cannot be resolved by native ID, preserve dependent values as `unknown`, name missing evidence, and emit the complete required report structure. Never infer a pass, completion, approval, or failure.
 
@@ -120,6 +124,7 @@ Return:
 - Active discovery:
 - Completed discovery and `discovery-completed` evidence:
 - Proposed DAG revision:
+- Rejected DAG revisions:
 - Missing evidence:
 
 ## Cursor implementation and PRs
@@ -148,6 +153,7 @@ Return:
 - Required follow-up issues:
 
 ## Human decisions
+- Resolved historical pauses:
 - Decision:
   Affected subgraph:
   Evidence:

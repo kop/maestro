@@ -7,6 +7,7 @@ tests=(
   tests/test-protocol.sh
   tests/test-state-machine-invariants.sh
   tests/test-state-machine-conformance.sh
+  tests/test-recovery-protocol.sh
   tests/test-planning-agents.sh
   tests/test-review-agents.sh
   tests/test-symphony-start.sh

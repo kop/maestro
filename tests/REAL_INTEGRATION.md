@@ -45,8 +45,26 @@ Report every unavailable capability as `SKIPPED: reason`; never count it as pass
 12. Manually change one generated label and one acceptance criterion. Confirm the
     next pass repairs the label, pauses semantic drift, and does not fight the
     manual contract edit.
-13. Start a fresh Claude session and run `/maestro:symphony-status`. Confirm it
-    reconstructs the same state from Linear, GitHub, and journal evidence.
+13. Resolve the semantic-drift pause through its durable `decision-resolved`
+    disposition and verify the recorded resume phase is restored.
+14. Exercise and merge-reconcile the final integration/outcome-verification issue
+    with linked end-to-end evidence.
+15. Retain one explicit `human-decision-required` debt, attempt closeout, and
+    verify closeout is blocked with no
+    `symphony-completed` event and no control `maestro:complete`.
+16. Resolve that debt through the durable `decision-resolved` path and confirm
+    the resolution evidence.
+17. Verify every closeout gate: approved work completed or explicitly cancelled,
+    all merges reconciled, no active managed PR/delegation, no unresolved drift,
+    decision, ambiguity, retry exhaustion, or cleanup debt, and every required
+    follow-up identity confirmed.
+18. Append and inspect `Final as-built outcome` with final integration evidence,
+    approved/reconciled scope, deviations, and follow-ups.
+19. Re-run closeout and verify its stable action identity is idempotent, with
+    exactly one `symphony-completed` and control-only `maestro:complete`.
+20. Start a fresh session and run `/maestro:symphony-status`. Confirm it
+    reconstructs completed state and the historical rejected/resolved decisions
+    from Linear, GitHub, and journal evidence.
 
 ## Evidence to retain
 
@@ -56,4 +74,6 @@ Report every unavailable capability as `SKIPPED: reason`; never count it as pass
 - Exact review head SHA and GitHub record.
 - Owned-worktree cleanup result.
 - Merge SHA and post-merge issue updates.
+- Final integration/outcome evidence, debt-blocked closeout, durable resolution,
+  final as-built outcome, and idempotent completion evidence.
 - Fresh-session status output.

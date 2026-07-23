@@ -147,6 +147,8 @@ The attachment-state cleanup branch applies on success, failure, timeout, stale 
 
 ## Publication and Cursor follow-up
 
+- Embed `Maestro-Review-Action-Identity: <review action identity>` in every
+  GitHub review or fallback PR comment. Search the exact PR/head before publication and after an ambiguous response before retrying that marker.
 - Pass: submit approval when the authenticated identity may do so; otherwise post
   one top-level PR comment recording the passed Symphony review.
 - Changes required: submit request-changes when permitted; otherwise post one
@@ -170,6 +172,12 @@ Required outcomes:
 1. Preserve the consumed API contract documented in the issue.
 2. Add evidence for the backward-compatibility acceptance criterion.
 ```
+
+Embed
+`Maestro-Cursor-Follow-Up-Identity: <review action identity + linear-cursor-follow-up channel>`
+in this comment. Search the implementation issue for the marker before create and
+after an ambiguous response. The comment links exactly one confirmed canonical GitHub record; an unresolved or duplicate GitHub record suppresses the Linear
+follow-up.
 
 Use the actual PR, SHA, review link, and consolidated outcomes. Do not mention
 `@Cursor` for a pure human decision unless Cursor has a concrete implementation

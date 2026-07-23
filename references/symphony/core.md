@@ -95,6 +95,7 @@ Control contract revision: `symphony-control-v1`
 | Action | Identity |
 |---|---|
 | Create control issue | Canonical tuple of native target Linear scope UUID + normalized requested goal + literal `symphony-control-v1` |
+| Create discovery issue | Symphony UUID + discovery revision + fixed discovery node/question key |
 | Propose DAG revision | Symphony UUID + contract revision + DAG revision |
 | Approve DAG revision | Symphony UUID + exact contract revision + exact DAG revision |
 | Create candidate issue | Symphony UUID + approved DAG revision + fixed node key |
@@ -103,6 +104,9 @@ Control contract revision: `symphony-control-v1`
 | Review PR | GitHub PR native ID + head SHA + contract revision + review-policy revision |
 | Reconcile merge | Linear issue UUID + merge SHA |
 | Update downstream issue | Downstream UUID + source merge SHA + target contract revision |
+| Create required follow-up issue | Symphony UUID + source implementation issue UUID + source merge SHA + fixed follow-up key |
+| Publish GitHub review record | Existing Review PR action identity + exact PR/head channel |
+| Create Linear `@Cursor` follow-up | Existing Review PR action identity + `linear-cursor-follow-up` channel |
 | Complete Symphony | Symphony UUID + final approved DAG revision + final integration issue UUID + evidence revision |
 
 Normalize a requested goal by Unicode NFC normalization, trimming leading and
@@ -123,6 +127,17 @@ Embed each candidate's fixed creation identity in its initial issue description 
 `Maestro-DAG-Node-Creation-Identity: <identity>`. After an uncertain mutation,
 search for the native target and identity, including the embedded marker, before
 retrying.
+
+Discovery and required-follow-up keys are fixed by the approved plan or issue
+contract, never random, model-selected, or regenerated on a later pass. Embed
+their complete identities in their native Linear issues. Search the exact native
+scope for the identity before create and after an ambiguous create. The same
+pre-publication and post-ambiguous search rule applies to the exact PR/head for a
+GitHub review or fallback comment and to the source implementation issue for its
+Linear `@Cursor` follow-up. Every GitHub record embeds
+`Maestro-Review-Action-Identity`; every Linear review follow-up embeds
+`Maestro-Cursor-Follow-Up-Identity` and links exactly one confirmed canonical
+GitHub record.
 
 ## Journal event envelope
 
@@ -163,23 +178,41 @@ It never attempts to reveal hidden chain-of-thought.
 Producers must use only the event types, outcomes, failure categories, and
 verdicts declared below. Consumers reconstruct transitions from the event plus
 fresh native provider state; an event alone never proves a mutation.
-Operational instructions use exact standalone grammar lines:
+Operational instructions use this exact standalone conditional grammar:
 
-- `append event \`VALUE\`` and `consume event \`VALUE\``;
-- `emit outcome \`VALUE\`` and `consume outcome \`VALUE\``;
-- `emit failure category \`VALUE\`` and
-  `consume failure category \`VALUE\``;
-- `apply label \`VALUE\`` and `read label \`VALUE\``; and
-- `return ... verdict \`VALUE\`` and `consume ... verdict \`VALUE\``.
+```text
+rule RULE-ID | when OBSERVABLE-PREDICATE | ACTION-KIND `VALUE` | next NEXT-STATE | choice CHOICE-GROUP
+```
+
+Every identifier and predicate is normalized kebab-case. `RULE-ID` is unique.
+`OBSERVABLE-PREDICATE` names fresh provider evidence, a confirmed journal/native
+pair, or another directly testable normalized state; `always`, `unconditional`,
+and vague judgment are invalid. `ACTION-KIND` is one of `append event`, `consume
+event`, `emit outcome`, `consume outcome`, `emit failure category`, `consume
+failure category`, `apply label`, `read label`, `return review verdict`, `consume
+review verdict`, `return reconciliation verdict`, or `consume reconciliation
+verdict`. `NEXT-STATE` is the only transition authorized by the complete tuple.
+Use `choice none` only for nonexclusive rules.
+
+Rules in the same non-`none` choice group and action direction are mutually
+exclusive. Producer and consumer rules are mirror choice points evaluated
+separately. Within one direction their predicates must be distinct, and a
+normalized observation may satisfy exactly one.
+Action outcomes use `action-outcome`; entity phases use `entity-phase`; review
+verdicts use `review-verdict`; reconciliation verdicts use
+`reconciliation-verdict`. Review `pass`, repository merge readiness, and
+reconciliation `complete` are separate predicates and never substitute for one
+another. Entity-phase predicates require a concrete control, discovery, or
+implementation entity and its event-specific completion authority.
 
 These lines are executable protocol instructions at the point where the
 corresponding action, classification, transition, or reconstruction occurs; a
-detached declaration block is not an instruction and is invalid. The repository's
-`tests/fixtures/state-machine-matrix.tsv` is only a machine-testable index of
-those real instruction edges. Its exact value sets must match these normative
-tables and its `(kind, value, direction, path)` edges must exactly match the
-operational lines. An undeclared actual emission or a listed edge without its
-real instruction is invalid.
+detached declaration block and a naked action command are invalid. The
+repository's `tests/fixtures/state-machine-matrix.tsv` is only a machine-testable
+index of those real instruction edges. Its exact value sets and
+`(kind, value, direction, path, predicate, next-state, choice-group)` tuples must
+exactly match the operational rules. An undeclared actual tuple or a listed tuple
+without its real instruction is invalid.
 
 ### Journal event types
 
@@ -190,6 +223,7 @@ real instruction is invalid.
 | `discovery-completed` | Start/reconcile after the discovery result and remaining unknowns are confirmed | Completes only that discovery issue and makes its evidence consumable by planning |
 | `dag-proposed` | Start/reconcile before requesting approval | Approval UI/session reconstructs the exact proposal; the control issue enters `maestro:planning` |
 | `dag-approved` | Start/reconcile after explicit approval and before materialization | Materializer authorizes only the recorded contract/DAG revision |
+| `dag-rejected` | Start/reconcile after explicit rejection and before replanning | Permanently rejects that exact DAG/contract revision as authority for materialization |
 | `dag-node-bound` | Materializer immediately after one confirmed candidate creation or identity match | Later passes recover the fixed node/native UUID/human-key binding |
 | `dag-edge-bound` | Materializer after one confirmed native `blockedBy` relation | Later passes recover confirmed native edges without duplication |
 | `dag-materialized` | Materializer after every required node and edge is confirmed | Control enters `maestro:executing`; implementation nodes remain planning until dispatch |
@@ -200,6 +234,7 @@ real instruction is invalid.
 | `merge-observed` | Reconciler for every confirmed GitHub merge not yet reconciled | Preserves merge identity while keeping “merged” distinct from “merge-reconciled” |
 | `merge-reconciled` | Reconciler only after a complete, evidenced reconciler verdict | Completes only that implementation issue and permits downstream readiness recalculation |
 | `human-decision-required` | Start/review/reconcile when human authority is required | Records prior/resume phase and locks only the affected subgraph |
+| `decision-resolved` | Start/reconcile after a declared disposition and required approval evidence | Closes one historical pause and authorizes removal of its pause label plus restoration of only its recorded resume phase |
 | `follow-up-created` | Reconciler after a required follow-up issue is confirmed | Closeout consumes the confirmed follow-up inventory |
 | `issue-cancelled` | Reconciler after explicit approval and a durable cancellation rationale/dependency disposition | Completes only that implementation issue; dependants follow the approved revised DAG |
 | `action-failed` | Any material mutation/review producer after a non-confirmed attempt | Retry controller consumes outcome, category, attempt, and evidence |
@@ -209,6 +244,21 @@ real instruction is invalid.
 
 These names are exhaustive. A combined approval/materialization event is invalid
 because it cannot preserve approval authority or partial materialization progress.
+
+`dag-rejected` contains the Symphony UUID, exact rejected DAG/contract revision,
+proposal action identity, rejection evidence and rationale, and whether the
+proposal is superseded or may be revised. It is appended before replanning. A
+rejected revision can never authorize materialization, and fresh sessions consume
+the event rather than rediscovering that revision as awaiting approval.
+
+`decision-resolved` contains the decision/pause action identity; one finite
+disposition (`accept-observed-as-revision`, `restore-approved-state`,
+`revise-affected-wave`, or another value declared by the governing contract);
+governing contract/DAG revision; affected subgraph; approval evidence when
+required; and confirmed resume phase. Append `decision-resolved` before removing
+`maestro:needs-human` or `maestro:scope-change` and restoring the recorded phase.
+Fresh sessions distinguish unresolved pauses from resolved historical pauses by
+pairing each pause action identity with at most one resolution event.
 
 ### Action outcomes
 
@@ -252,6 +302,70 @@ CI, capacity exhaustion, and normal Cursor execution consume no attempt.
 | Reconciliation `complete` | `merge-observed`, then `merge-reconciled` | Complete only that implementation issue and recalculate dependants when all criteria are evidenced |
 | Reconciliation `human-decision` | `merge-observed`, `human-decision-required` | Leave unreconciled and blockers locked; enter the applicable pause phase |
 | Reconciliation `inconclusive` | `merge-observed`, `action-failed` | Leave unreconciled and blockers locked; bounded retry |
+
+### Allowed predicate-to-transition sets
+
+The following tuples are exhaustive for both producer and consumer directions.
+Operational rules may not move any action/value to another predicate, next state,
+or choice group.
+
+| Kind | Value | Direction | Predicate | Next state | Choice group |
+|---|---|---|---|---|---|
+| `event` | `symphony-started` | `both` | `control-creation-is-confirmed` | `entity-discovery` | `none` |
+| `event` | `discovery-recorded` | `both` | `discovery-evidence-is-durably-confirmed` | `discovery-active` | `none` |
+| `event` | `discovery-completed` | `both` | `discovery-result-contract-is-confirmed` | `entity-complete` | `none` |
+| `event` | `dag-proposed` | `both` | `exact-dag-proposal-is-durably-confirmed` | `entity-planning` | `none` |
+| `event` | `dag-approved` | `both` | `exact-dag-revision-approval-is-durably-confirmed` | `dag-recovery` | `none` |
+| `event` | `dag-rejected` | `both` | `exact-dag-rejection-is-durably-confirmed` | `dag-replanning` | `none` |
+| `event` | `dag-node-bound` | `both` | `one-native-node-binding-is-confirmed` | `dag-recovery` | `none` |
+| `event` | `dag-edge-bound` | `both` | `one-native-edge-binding-is-confirmed` | `dag-recovery` | `none` |
+| `event` | `dag-materialized` | `both` | `all-native-bindings-and-events-are-confirmed` | `entity-executing` | `none` |
+| `event` | `semantic-drift-detected` | `both` | `normalized-contract-or-edge-drift-is-confirmed` | `affected-subgraph-paused` | `none` |
+| `event` | `issue-dispatched` | `both` | `cursor-delegation-is-freshly-confirmed` | `entity-executing` | `none` |
+| `event` | `review-recorded` | `both` | `canonical-exact-head-review-record-is-confirmed` | `review-gate-recorded` | `none` |
+| `event` | `review-stale-head` | `both` | `remote-pr-head-no-longer-matches-reviewed-head` | `review-new-head` | `none` |
+| `event` | `merge-observed` | `both` | `github-merge-sha-is-freshly-confirmed` | `merge-reconciliation-pending` | `none` |
+| `event` | `merge-reconciled` | `both` | `merge-reconciliation-is-complete-and-evidenced` | `implementation-complete` | `none` |
+| `event` | `human-decision-required` | `both` | `bounded-or-strategic-human-authority-is-required` | `affected-subgraph-paused` | `none` |
+| `event` | `decision-resolved` | `both` | `resolution-disposition-and-resume-evidence-are-confirmed` | `recorded-resume-phase` | `none` |
+| `event` | `follow-up-created` | `both` | `required-follow-up-identity-is-confirmed` | `follow-up-inventory-confirmed` | `none` |
+| `event` | `issue-cancelled` | `both` | `approved-cancellation-and-dependency-disposition-are-confirmed` | `implementation-complete` | `none` |
+| `event` | `action-failed` | `both` | `material-action-attempt-is-not-confirmed` | `bounded-recovery` | `none` |
+| `event` | `retry-exhausted` | `both` | `unchanged-state-retry-budget-is-exhausted` | `entity-needs-human` | `none` |
+| `event` | `cleanup-failed` | `both` | `owned-cleanup-safety-or-completion-is-unconfirmed` | `cleanup-debt` | `none` |
+| `event` | `symphony-completed` | `both` | `all-closeout-gates-and-final-outcome-are-confirmed` | `entity-complete` | `none` |
+| `action-outcome` | `confirmed` | `both` | `external-result-is-freshly-confirmed` | `advance-confirmed-transition` | `action-outcome` |
+| `action-outcome` | `ambiguous` | `both` | `external-result-may-exist-without-confirmation` | `resolve-action-identity` | `action-outcome` |
+| `action-outcome` | `retryable-failure` | `both` | `unchanged-state-permits-bounded-retry` | `bounded-retry-with-phase-retained` | `action-outcome` |
+| `action-outcome` | `permanent-failure` | `both` | `confirmed-invalid-state-or-capability-blocks-retry` | `pause-affected-work` | `action-outcome` |
+| `failure-category` | `observation-failed` | `both` | `observation-failed-category-is-evidenced` | `observation-failed-recovery` | `none` |
+| `failure-category` | `observation-incomplete` | `both` | `observation-incomplete-category-is-evidenced` | `observation-incomplete-recovery` | `none` |
+| `failure-category` | `external-transient` | `both` | `external-transient-category-is-evidenced` | `external-transient-recovery` | `none` |
+| `failure-category` | `mutation-ambiguous` | `both` | `mutation-ambiguous-category-is-evidenced` | `mutation-ambiguous-recovery` | `none` |
+| `failure-category` | `semantic-drift` | `both` | `semantic-drift-category-is-evidenced` | `semantic-drift-recovery` | `none` |
+| `failure-category` | `review-stale-head` | `both` | `review-stale-head-category-is-evidenced` | `review-stale-head-recovery` | `none` |
+| `failure-category` | `validation-timeout` | `both` | `validation-timeout-category-is-evidenced` | `validation-timeout-recovery` | `none` |
+| `failure-category` | `capability-lost` | `both` | `capability-lost-category-is-evidenced` | `capability-lost-recovery` | `none` |
+| `failure-category` | `cleanup-failed` | `both` | `cleanup-failed-category-is-evidenced` | `cleanup-failed-recovery` | `none` |
+| `failure-category` | `permanent-invalid` | `both` | `permanent-invalid-category-is-evidenced` | `permanent-invalid-recovery` | `none` |
+| `role-label` | `maestro-symphony` | `both` | `native-role-scope-is-confirmed` | `role-label-confirmed` | `none` |
+| `role-label` | `maestro-managed` | `both` | `native-role-scope-is-confirmed` | `role-label-confirmed` | `none` |
+| `phase-label` | `maestro:discovery` | `both` | `entity-scoped-discovery-authority-is-confirmed` | `entity-discovery` | `entity-phase` |
+| `phase-label` | `maestro:planning` | `both` | `entity-scoped-planning-authority-is-confirmed` | `entity-planning` | `entity-phase` |
+| `phase-label` | `maestro:executing` | `both` | `entity-scoped-execution-authority-is-confirmed` | `entity-executing` | `entity-phase` |
+| `phase-label` | `maestro:needs-human` | `both` | `entity-scoped-bounded-pause-is-confirmed` | `entity-needs-human` | `entity-phase` |
+| `phase-label` | `maestro:scope-change` | `both` | `entity-scoped-strategic-drift-is-confirmed` | `entity-scope-change` | `entity-phase` |
+| `phase-label` | `maestro:complete` | `both` | `entity-scoped-completion-authority-is-confirmed` | `entity-complete` | `entity-phase` |
+| `risk-label` | `maestro-risk-security` | `both` | `issue-label-or-changed-surface-has-security-risk` | `security-lens-selected` | `none` |
+| `risk-label` | `maestro-risk-infra` | `both` | `issue-label-or-changed-surface-has-infrastructure-risk` | `infrastructure-lens-selected` | `none` |
+| `risk-label` | `maestro-risk-migration` | `both` | `issue-label-or-changed-surface-has-migration-risk` | `migration-lenses-selected` | `none` |
+| `review-verdict` | `pass` | `both` | `all-required-review-lenses-pass-with-evidence` | `review-passed` | `review-verdict` |
+| `review-verdict` | `changes-required` | `both` | `confirmed-review-finding-requires-change` | `review-changes-required` | `review-verdict` |
+| `review-verdict` | `human-decision` | `both` | `review-evidence-requires-bounded-or-strategic-decision` | `review-human-decision` | `review-verdict` |
+| `review-verdict` | `inconclusive` | `both` | `required-review-evidence-is-missing` | `review-inconclusive` | `review-verdict` |
+| `reconciliation-verdict` | `complete` | `both` | `merge-reconciliation-is-complete-and-evidenced` | `implementation-complete` | `reconciliation-verdict` |
+| `reconciliation-verdict` | `human-decision` | `both` | `merge-is-observed-but-acceptance-needs-decision` | `reconciliation-human-decision` | `reconciliation-verdict` |
+| `reconciliation-verdict` | `inconclusive` | `both` | `merge-identity-or-acceptance-evidence-is-missing` | `reconciliation-inconclusive` | `reconciliation-verdict` |
 
 ## Maestro labels
 
