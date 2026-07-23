@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.1.4",
-  "description": "Personal model-tiered agents and orchestration: /review skill, maestro orchestrator and peer proxy agents",
+  "version": "0.2.0",
+  "description": "Linear and GitHub control plane for planning issue DAGs, delegating implementation to Cursor, contextual PR review, and post-merge reconciliation",
   "author": { "name": "kop" }
 }

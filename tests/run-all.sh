@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+tests=(
+  tests/test-protocol.sh
+  tests/test-planning-agents.sh
+  tests/test-review-agents.sh
+  tests/test-symphony-start.sh
+  tests/test-symphony-review.sh
+  tests/test-symphony-reconcile.sh
+  tests/test-symphony-status.sh
+  tests/test-tool-integration-contract.sh
+  tests/test-package.sh
+)
+
+for test_path in "${tests[@]}"; do
+  "$test_path"
+done
+
+claude plugin validate .

@@ -1,0 +1,11 @@
+case_id|surface|simulated_result|expected_category|expected_action
+linear_partial_page|Linear|second_page_transport_failure|observation-incomplete|no-dependent-mutation
+linear_create_timeout|Linear|timeout_after_issue_submit|mutation-ambiguous|search-action-identity
+github_head_changed|GitHub|head_differs_before_publish|review-stale-head|publish-nothing
+github_formal_review_denied|GitHub|same_identity_cannot_review|none|post-top-level-comment
+cursor_already_delegated|Cursor|delegation_exists_on_fresh_read|already-dispatched|no-duplicate-delegation
+cursor_unavailable|Cursor|integration_target_missing|cursor-unavailable|skip-affected-dispatch
+worktree_marker_mismatch|Filesystem|marker_does_not_match_expected_review|cleanup-failed|never-delete
+validation_timeout|Filesystem|validator_exceeds_time_budget|validation-timeout|terminate-cleanup-inconclusive
+ci_pending|GitHub|required_checks_pending|none|no-failure-no-journal
+capacity_full|Controller|three_cursor_issues_active|none|no-failure-no-journal
