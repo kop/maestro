@@ -289,11 +289,17 @@ dependant edge in the same unconfirmed step.
 
 When a prior `human-decision-required`, `semantic-drift-detected`, or
 `retry-exhausted` pause appears, preserve its exact pause identity and prior/resume
-phase. A changed external observation alone never resumes work. Confirm a matching
-`decision-resolved` for that exact pause identity, finite disposition, governing
-revision, affected subgraph, required approval evidence, and recorded resume phase
-before any resume. Only then, atomically remove the matching pause label and
-restore the declared phase; a stale or mismatched resolution remains paused.
+phase. On every fresh session, classify the recorded pause before inspecting
+whether its native phase label is present. Restore a missing
+`maestro:scope-change` label when the pause is confirmed and strategic authority
+is required; restore a missing `maestro:needs-human` label when the pause is
+confirmed and strategic authority is not required. These predicates are
+complementary and never authorize both labels. A changed external observation
+alone never resumes work. Confirm a matching `decision-resolved` for that exact
+pause identity, finite disposition, governing revision, affected subgraph,
+required approval evidence, and recorded resume phase before any resume. Require
+the matching `decision-resolved` before removing either pause label or restoring
+the declared phase; a stale or mismatched resolution remains paused.
 Require the matching `decision-resolved` before any resume transition.
 
 rule symphony-start-append-event-decision-resolved | when resolution-disposition-and-resume-evidence-are-confirmed | append event `decision-resolved` | next recorded-resume-phase | choice none
@@ -318,7 +324,9 @@ rule symphony-start-apply-label-maestro-risk-migration | when issue-label-or-cha
 
 rule symphony-start-apply-label-maestro-executing | when entity-scoped-execution-authority-is-confirmed | apply label `maestro:executing` | next entity-executing | choice entity-phase
 
-rule symphony-start-apply-label-maestro-needs-human | when entity-scoped-bounded-pause-is-confirmed | apply label `maestro:needs-human` | next entity-needs-human | choice entity-phase
+rule symphony-start-apply-label-maestro-needs-human | when entity-scoped-pause-is-confirmed-and-strategic-authority-is-not-required | apply label `maestro:needs-human` | next entity-needs-human | choice entity-phase
+
+rule symphony-start-apply-label-maestro-scope-change | when entity-scoped-pause-is-confirmed-and-strategic-authority-is-required | apply label `maestro:scope-change` | next entity-scope-change | choice entity-phase
 
 rule symphony-start-append-event-action-failed | when material-action-attempt-is-not-confirmed | append event `action-failed` | next bounded-recovery | choice none
 

@@ -88,7 +88,9 @@ rule symphony-reconcile-consume-event-semantic-drift-detected | when normalized-
 
 rule symphony-reconcile-consume-event-issue-dispatched | when cursor-delegation-is-freshly-confirmed | consume event `issue-dispatched` | next entity-executing | choice none
 
-rule symphony-reconcile-consume-event-review-recorded | when canonical-exact-head-review-record-is-confirmed | consume event `review-recorded` | next review-gate-recorded | choice none
+rule symphony-reconcile-consume-event-review-requested | when canonical-review-input-revision-is-durably-confirmed | consume event `review-requested` | next review-revision-eligible | choice none
+
+rule symphony-reconcile-consume-event-review-recorded | when canonical-exact-head-and-input-revision-review-record-is-confirmed | consume event `review-recorded` | next review-gate-recorded | choice none
 
 rule symphony-reconcile-consume-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | consume event `review-stale-head` | next review-new-head | choice none
 
@@ -190,25 +192,44 @@ rule symphony-reconcile-append-event-action-failed | when material-action-attemp
 
 Consume the reconciler result according to its exact returned value:
 
-rule symphony-reconcile-consume-reconciliation-verdict-complete | when merge-reconciliation-is-complete-and-evidenced | consume reconciliation verdict `complete` | next implementation-complete | choice reconciliation-verdict
+rule symphony-reconcile-consume-reconciliation-verdict-complete | when aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-present-and-complete-is-evidenced | consume reconciliation verdict `complete` | next implementation-complete | choice reconciliation-verdict
 
-rule symphony-reconcile-consume-reconciliation-verdict-human-decision | when merge-is-observed-but-acceptance-needs-decision | consume reconciliation verdict `human-decision` | next reconciliation-human-decision | choice reconciliation-verdict
+rule symphony-reconcile-consume-reconciliation-verdict-human-decision | when aggregate-reconciliation-decision-is-required | consume reconciliation verdict `human-decision` | next reconciliation-human-decision | choice reconciliation-verdict
 
-rule symphony-reconcile-consume-reconciliation-verdict-inconclusive | when merge-identity-or-acceptance-evidence-is-missing | consume reconciliation verdict `inconclusive` | next reconciliation-inconclusive | choice reconciliation-verdict
+rule symphony-reconcile-consume-reconciliation-verdict-inconclusive | when aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-missing | consume reconciliation verdict `inconclusive` | next reconciliation-inconclusive | choice reconciliation-verdict
 
 An ambiguous write is searched by native target/action identity before retry.
 
 ## 4. Review new PR heads
 
-For each relevant current PR head without a confirmed review identity:
+For each relevant current PR head, derive the current review input revision from
+the complete required evidence manifest and applicable exact
+decision-resolutions. Select records by exact head plus review input revision.
+An older revision is historical and neither satisfies nor blocks the current
+revision.
 
-1. Assemble the complete Required review identity.
-2. Invoke internal `maestro:symphony-review` through the Skill tool.
-3. Record its exact-SHA result and cleanup status.
-4. If the head became stale, publish nothing and leave the new head eligible.
-5. If changes are required, let the internal skill create the canonical GitHub
-   record and Linear `@Cursor` follow-up.
-6. If human judgment is required, pause only the affected subgraph.
+1. Assemble the complete Required review identity and canonical input array.
+2. If the matching `review-requested` event is absent, append and confirm it
+   before dispatching an expensive review or publishing either channel. Stop the
+   pass after that durable boundary.
+3. If no result exists for the confirmed current review input revision, invoke
+   internal `maestro:symphony-review` through the Skill tool.
+4. Record its exact-head and exact-input-revision result and cleanup status.
+5. If the head became stale, publish nothing and leave the new head eligible.
+6. An unchanged `changes-required` result waits for a new head, contract
+   revision, review-policy revision, or review input revision; do not redispatch.
+7. A `human-decision` result remains paused until an exact matching
+   `decision-resolved` is applicable. That resolution changes the same-head
+   review input revision and makes only the new revision eligible; a stale or
+   mismatched resolution changes nothing.
+8. A confirmed published actionable `inconclusive` result appends
+   `review-recorded` and waits for changed evidence. An unpublished transient
+   `inconclusive` result appends `action-failed` and follows bounded retry.
+9. If changes are required, let the internal skill create the canonical GitHub
+   record and Linear `@Cursor` follow-up. If human judgment is required, pause
+   only the affected subgraph.
+
+rule symphony-reconcile-append-event-review-requested | when canonical-review-input-revision-is-durably-confirmed | append event `review-requested` | next review-revision-eligible | choice none
 
 Consume the review result according to its exact returned value:
 
@@ -223,10 +244,7 @@ rule symphony-reconcile-consume-review-verdict-inconclusive | when aggregate-str
 Maestro does not triage other reviewers' comments and does not diagnose ordinary
 CI failures. Cursor owns all PR convergence.
 
-Do not mark a PR merge-ready unless current repository gates show zero failing
-checks, at least one human/bot approval, addressed review comments/threads, all
-other policy gates satisfied, and the passing Maestro review identity matches the
-current head.
+Do not mark a PR merge-ready unless the current passing Maestro review identity matches the current head and current review input revision, current repository gates show zero failing checks, at least one human/bot approval exists, review comments/threads are addressed, and all other policy gates are satisfied.
 
 ## 5. Continue discovery and planning
 
@@ -403,9 +421,9 @@ rule symphony-reconcile-apply-label-maestro-planning | when entity-scoped-planni
 
 rule symphony-reconcile-apply-label-maestro-executing | when entity-scoped-execution-authority-is-confirmed | apply label `maestro:executing` | next entity-executing | choice entity-phase
 
-rule symphony-reconcile-apply-label-maestro-needs-human | when entity-scoped-bounded-pause-is-confirmed | apply label `maestro:needs-human` | next entity-needs-human | choice entity-phase
+rule symphony-reconcile-apply-label-maestro-needs-human | when entity-scoped-pause-is-confirmed-and-strategic-authority-is-not-required | apply label `maestro:needs-human` | next entity-needs-human | choice entity-phase
 
-rule symphony-reconcile-apply-label-maestro-scope-change | when entity-scoped-strategic-drift-is-confirmed | apply label `maestro:scope-change` | next entity-scope-change | choice entity-phase
+rule symphony-reconcile-apply-label-maestro-scope-change | when entity-scoped-pause-is-confirmed-and-strategic-authority-is-required | apply label `maestro:scope-change` | next entity-scope-change | choice entity-phase
 
 rule symphony-reconcile-apply-label-maestro-complete | when entity-scoped-completion-authority-is-confirmed | apply label `maestro:complete` | next entity-complete | choice entity-phase
 

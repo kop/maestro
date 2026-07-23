@@ -70,7 +70,7 @@ while IFS=$'\t' read -r case_id state category reads mutations events suppressed
   rows=$((rows + 1))
 done < "$fixture"
 
-[[ "$rows" -eq 69 ]] || fail "expected 69 failure-injection rows, got $rows"
+[[ "$rows" -eq 84 ]] || fail "expected 84 failure-injection rows, got $rows"
 
 # Fixture order and duplicate rows cannot affect the state-derived decision set.
 baseline=$(reduce_fixture_rows < "$fixture" | sort -u)

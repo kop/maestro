@@ -54,7 +54,9 @@ rule symphony-status-consume-event-semantic-drift-detected | when normalized-con
 
 rule symphony-status-consume-event-issue-dispatched | when cursor-delegation-is-freshly-confirmed | consume event `issue-dispatched` | next entity-executing | choice none
 
-rule symphony-status-consume-event-review-recorded | when canonical-exact-head-review-record-is-confirmed | consume event `review-recorded` | next review-gate-recorded | choice none
+rule symphony-status-consume-event-review-requested | when canonical-review-input-revision-is-durably-confirmed | consume event `review-requested` | next review-revision-eligible | choice none
+
+rule symphony-status-consume-event-review-recorded | when canonical-exact-head-and-input-revision-review-record-is-confirmed | consume event `review-recorded` | next review-gate-recorded | choice none
 
 rule symphony-status-consume-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | consume event `review-stale-head` | next review-new-head | choice none
 
@@ -90,9 +92,9 @@ rule symphony-status-read-label-maestro-planning | when entity-scoped-planning-a
 
 rule symphony-status-read-label-maestro-executing | when entity-scoped-execution-authority-is-confirmed | read label `maestro:executing` | next entity-executing | choice entity-phase
 
-rule symphony-status-read-label-maestro-needs-human | when entity-scoped-bounded-pause-is-confirmed | read label `maestro:needs-human` | next entity-needs-human | choice entity-phase
+rule symphony-status-read-label-maestro-needs-human | when entity-scoped-pause-is-confirmed-and-strategic-authority-is-not-required | read label `maestro:needs-human` | next entity-needs-human | choice entity-phase
 
-rule symphony-status-read-label-maestro-scope-change | when entity-scoped-strategic-drift-is-confirmed | read label `maestro:scope-change` | next entity-scope-change | choice entity-phase
+rule symphony-status-read-label-maestro-scope-change | when entity-scoped-pause-is-confirmed-and-strategic-authority-is-required | read label `maestro:scope-change` | next entity-scope-change | choice entity-phase
 
 rule symphony-status-read-label-maestro-complete | when entity-scoped-completion-authority-is-confirmed | read label `maestro:complete` | next entity-complete | choice entity-phase
 
@@ -136,8 +138,8 @@ Return:
 - Missing evidence:
 
 ## Cursor implementation and PRs
-| Issue | Repository | Delegation | PR | Head | CI | Approvals | Threads | Maestro review |
-|---|---|---|---|---|---|---|---|---|
+| Issue | Repository | Delegation | PR | Head | Review input revision | CI | Approvals | Threads | Maestro review |
+|---|---|---|---|---|---|---|---|---|---|
 
 ## Ready and blocked work
 - Ready in deterministic order:

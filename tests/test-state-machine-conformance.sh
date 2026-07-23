@@ -305,7 +305,8 @@ assert_contains skills/symphony-start/SKILL.md 'must not select.*revision'
 if [[ "${STATE_MACHINE_CONFORMANCE_SKIP_MUTATIONS:-0}" != 1 ]]; then
   mutation_root="$tmp_dir/mutations"
   for variant in naked wrong-predicate coherent-undeclared duplicate-always undeclared \
-    phase-outside verdict-outside review-precedence-regression; do
+    phase-outside verdict-outside review-precedence-regression \
+    reconciliation-precedence-regression; do
     mkdir -p "$mutation_root/$variant"
     cp -R agents references skills tests README.md "$mutation_root/$variant/"
   done
@@ -336,9 +337,14 @@ if [[ "${STATE_MACHINE_CONFORMANCE_SKIP_MUTATIONS:-0}" != 1 ]]; then
     "$mutation_root/review-precedence-regression/skills/symphony-review/SKILL.md" \
     "$mutation_root/review-precedence-regression/skills/symphony-reconcile/SKILL.md" \
     "$mutation_root/review-precedence-regression/tests/fixtures/state-machine-matrix.tsv"
+  sed -i 's/aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-missing/aggregate-reconciliation-identity-or-required-evidence-is-missing/g' \
+    "$mutation_root/reconciliation-precedence-regression/agents/implementation-reconciler.md" \
+    "$mutation_root/reconciliation-precedence-regression/skills/symphony-reconcile/SKILL.md" \
+    "$mutation_root/reconciliation-precedence-regression/tests/fixtures/state-machine-matrix.tsv"
 
   for variant in naked wrong-predicate coherent-undeclared duplicate-always undeclared \
-    phase-outside verdict-outside review-precedence-regression; do
+    phase-outside verdict-outside review-precedence-regression \
+    reconciliation-precedence-regression; do
     if (
       cd "$mutation_root/$variant"
       STATE_MACHINE_CONFORMANCE_SKIP_MUTATIONS=1 \

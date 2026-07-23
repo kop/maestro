@@ -101,12 +101,12 @@ Control contract revision: `symphony-control-v1`
 | Create candidate issue | Symphony UUID + approved DAG revision + fixed node key |
 | Create dependency edge | Symphony UUID + approved DAG revision + prerequisite node key + dependant node key + `blockedBy` |
 | Delegate issue | Linear issue UUID + contract revision + Cursor integration ID |
-| Review PR | GitHub PR native ID + head SHA + contract revision + review-policy revision |
+| Review PR | GitHub PR native ID + head SHA + contract revision + DAG revision + review-policy revision + review input revision |
 | Reconcile merge | Linear issue UUID + merge SHA |
 | Update downstream issue | Downstream UUID + source merge SHA + target contract revision |
 | Create required follow-up issue | Symphony UUID + source implementation issue UUID + source merge SHA + fixed follow-up key |
-| Publish GitHub review record | Existing Review PR action identity + exact PR/head channel |
-| Create Linear `@Cursor` follow-up | Existing Review PR action identity + `linear-cursor-follow-up` channel |
+| Publish GitHub review record | Existing Review PR action identity + exact PR/head channel + review input revision |
+| Create Linear `@Cursor` follow-up | Existing Review PR action identity + `linear-cursor-follow-up` channel + review input revision |
 | Complete Symphony | Symphony UUID + final approved DAG revision + final integration issue UUID + evidence revision |
 
 Canonical identity text uses Unicode NFC normalization, converts CRLF and CR to
@@ -119,6 +119,64 @@ JSON string escaping. Digest the serialized UTF-8 bytes with SHA-256 and encode 
 provider-canonical spelling. Ordered sets are deduplicated by exact canonical
 item and sorted lexicographically by the UTF-8 bytes of each whitespace-free JSON
 item before serialization.
+
+The canonical review input revision uses those same RFC 8259, Unicode, ordering,
+SHA-256, and lowercase-hex rules. Build one complete required evidence manifest.
+Each required lens or validator contributes
+`["lens"|"validator","<stable key>","present"|"missing"|"unavailable","<evidence revision>"]`;
+use the explicit evidence revision sentinel `missing` or `unavailable` when that
+state applies. Never omit an expected item.
+
+Lens stable keys are the fully qualified internal agent identifier from the
+finite roster in the review protocol; they are never display text. Validator stable keys use `review-validator-key-v1:<digest>` of the `maestro-review-validator-key-v1` tuple
+`["maestro-review-validator-key-v1","<protocol-declared validator kind>","<normalized command or inspection descriptor>"]`.
+Validator kinds are exactly `issue-validation-command`,
+`kubernetes-helm-render`, `docker-build-runtime`, or
+`github-actions-workflow`; no other kind or display alias is valid.
+Source kinds are exactly `agent-contract`, `roster-selector`, `validator-command`, `validator-config`, and `validator-capability`.
+Their three fields are fixed: `agent-contract` uses the repository-relative
+agent path and provider-canonical blob SHA; `roster-selector` uses the exact
+protocol predicate and current review-policy revision; `validator-command` uses
+the normalized command/inspection descriptor and literal revision `command-v1`;
+`validator-config` uses the repository-relative configuration path and
+provider-canonical blob SHA; `validator-capability` uses the executable/tool
+name and freshly confirmed provider version. No model-authored alias or revision
+is valid.
+For a `present` item, build the ordered source set needed to reproduce that
+evidence. Lens sources include the agent contract path and provider-canonical
+blob revision plus every roster selector and its provider revision. Validator
+sources include the normalized validator command or inspection descriptor, every relevant configuration path and provider-canonical blob revision, and the executable capability name and confirmed version. An absent, partial, or
+ambiguous required source makes the item `missing` or `unavailable`, never
+`present`.
+
+Serialize present evidence as
+`["maestro-review-evidence-v1","<lens|validator>","<stable key>","review-evidence-v1",[[<source kind>,<canonical source identity>,<provider-canonical revision>],...]]`;
+the fourth item is the fixed literal `review-evidence-v1`, never a selected or
+hand-authored revision. Serialize
+using the same ordered-set rules. Its evidence revision is
+`review-evidence-v1:<lowercase SHA-256 hex>`. Thus identical fresh-session inputs
+produce the same key and revision, while a changed validator command,
+configuration blob, capability version, agent contract, or roster-selection
+source changes the applicable stable key or evidence revision.
+
+Each applicable confirmed
+decision-resolution contributes
+`["<pause action identity>","<resolution action identity>","<governing revision>"]`.
+Only a resolution that exactly matches the governing pause and revision is
+applicable. Canonicalize both ordered sets as defined above, then serialize:
+
+```text
+["maestro-review-input-v1","<GitHub PR native ID>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>",[<required evidence manifest items>],[<applicable decision-resolution items>]]
+```
+
+Digest that array as `review-input-v1:<lowercase SHA-256 hex>`. A same-head
+evidence change or newly applicable matching decision-resolution therefore
+creates a new review input revision. Before expensive review or either
+publication, append and confirm `review-requested` containing the canonical
+array, digest, complete manifest, applicable resolutions, and provider evidence
+used to derive them. The Review PR action identity includes that exact review
+input revision; records from an older revision are historical and neither
+satisfy nor block the current revision.
 
 Normalize a requested goal with those text rules and case-folding. Serialize the
 control creation tuple as a whitespace-free JSON array whose first item is
@@ -249,7 +307,8 @@ without its real instruction is invalid.
 | `dag-materialized` | Materializer after every required node and edge is confirmed | Control enters `maestro:executing`; implementation nodes remain planning until dispatch |
 | `semantic-drift-detected` | Reconciler after a deduplicated contract or edge diff | Locks affected work and enters `maestro:needs-human` or `maestro:scope-change` |
 | `issue-dispatched` | Reconciler after fresh confirmation of Cursor delegation | Reconstructs active managed work; issue enters `maestro:executing` |
-| `review-recorded` | Review skill after its exact-head GitHub record is confirmed | Reconciler consumes the review verdict and next gate |
+| `review-requested` | Reconciler after the canonical current review input revision is durably confirmed | Authorizes review and publication for only that exact head and input revision |
+| `review-recorded` | Review skill after its exact-head and exact-input-revision GitHub record is confirmed | Reconciler consumes the current review verdict and next gate |
 | `review-stale-head` | Review skill when the head changes before publication | Discards the result and leaves the new head eligible |
 | `merge-observed` | Reconciler for every confirmed GitHub merge not yet reconciled | Preserves merge identity while keeping “merged” distinct from “merge-reconciled” |
 | `merge-reconciled` | Reconciler only after a complete, evidenced reconciler verdict | Completes only that implementation issue and permits downstream readiness recalculation |
@@ -331,12 +390,20 @@ defect wins; otherwise missing required evidence wins; otherwise pass. Thus the
 four predicates below are disjoint even when strategic decision, actionable
 defect, and required evidence states coexist.
 
+Reconciliation aggregation normalizes three booleans from confirmed evidence:
+reconciliation decision required, merge identity or required evidence missing,
+and reconciliation complete and evidenced. Apply this total precedence exactly
+once: human decision wins; otherwise missing identity or required evidence
+yields inconclusive; otherwise complete and evidenced yields complete. All other
+combinations are invalid producer output. These predicates are disjoint even
+when raw decision, missing-evidence, and completion observations coexist.
+
 | Source verdict | Journal events | Controller transition |
 |---|---|---|
 | Review `pass` | `review-recorded` | Keep executing; repository gates decide merge readiness |
 | Review `changes-required` | `review-recorded` | Keep executing; Cursor owns convergence |
 | Review `human-decision` | `review-recorded`, `human-decision-required` | Pause affected subgraph with prior/resume phase |
-| Review `inconclusive` | `action-failed` | Retry within policy; exhaust to `maestro:needs-human` |
+| Review `inconclusive` | Published actionable missing evidence: `review-recorded`; unpublished transient failure: `action-failed` | A durable actionable record waits for changed evidence; only an unpublished transient failure retries within policy |
 | Reconciliation `complete` | `merge-observed`, then `merge-reconciled` | Complete only that implementation issue and recalculate dependants when all criteria are evidenced |
 | Reconciliation `human-decision` | `merge-observed`, `human-decision-required` | Leave unreconciled and blockers locked; enter the applicable pause phase |
 | Reconciliation `inconclusive` | `merge-observed`, `action-failed` | Leave unreconciled and blockers locked; bounded retry |
@@ -361,7 +428,8 @@ or choice group.
 | `event` | `dag-materialized` | `both` | `all-native-bindings-and-events-are-confirmed` | `entity-executing` | `none` |
 | `event` | `semantic-drift-detected` | `both` | `normalized-contract-or-edge-drift-is-confirmed` | `affected-subgraph-paused` | `none` |
 | `event` | `issue-dispatched` | `both` | `cursor-delegation-is-freshly-confirmed` | `entity-executing` | `none` |
-| `event` | `review-recorded` | `both` | `canonical-exact-head-review-record-is-confirmed` | `review-gate-recorded` | `none` |
+| `event` | `review-requested` | `both` | `canonical-review-input-revision-is-durably-confirmed` | `review-revision-eligible` | `none` |
+| `event` | `review-recorded` | `both` | `canonical-exact-head-and-input-revision-review-record-is-confirmed` | `review-gate-recorded` | `none` |
 | `event` | `review-stale-head` | `both` | `remote-pr-head-no-longer-matches-reviewed-head` | `review-new-head` | `none` |
 | `event` | `merge-observed` | `both` | `github-merge-sha-is-freshly-confirmed` | `merge-reconciliation-pending` | `none` |
 | `event` | `merge-reconciled` | `both` | `merge-reconciliation-is-complete-and-evidenced` | `implementation-complete` | `none` |
@@ -392,8 +460,8 @@ or choice group.
 | `phase-label` | `maestro:discovery` | `both` | `entity-scoped-discovery-authority-is-confirmed` | `entity-discovery` | `entity-phase` |
 | `phase-label` | `maestro:planning` | `both` | `entity-scoped-planning-authority-is-confirmed` | `entity-planning` | `entity-phase` |
 | `phase-label` | `maestro:executing` | `both` | `entity-scoped-execution-authority-is-confirmed` | `entity-executing` | `entity-phase` |
-| `phase-label` | `maestro:needs-human` | `both` | `entity-scoped-bounded-pause-is-confirmed` | `entity-needs-human` | `entity-phase` |
-| `phase-label` | `maestro:scope-change` | `both` | `entity-scoped-strategic-drift-is-confirmed` | `entity-scope-change` | `entity-phase` |
+| `phase-label` | `maestro:needs-human` | `both` | `entity-scoped-pause-is-confirmed-and-strategic-authority-is-not-required` | `entity-needs-human` | `entity-phase` |
+| `phase-label` | `maestro:scope-change` | `both` | `entity-scoped-pause-is-confirmed-and-strategic-authority-is-required` | `entity-scope-change` | `entity-phase` |
 | `phase-label` | `maestro:complete` | `both` | `entity-scoped-completion-authority-is-confirmed` | `entity-complete` | `entity-phase` |
 | `risk-label` | `maestro-risk-security` | `both` | `issue-label-or-changed-surface-has-security-risk` | `security-lens-selected` | `none` |
 | `risk-label` | `maestro-risk-infra` | `both` | `issue-label-or-changed-surface-has-infrastructure-risk` | `infrastructure-lens-selected` | `none` |
@@ -402,9 +470,9 @@ or choice group.
 | `review-verdict` | `changes-required` | `both` | `aggregate-strategic-decision-is-absent-and-actionable-defect-is-present` | `review-changes-required` | `review-verdict` |
 | `review-verdict` | `human-decision` | `both` | `aggregate-strategic-decision-is-present` | `review-human-decision` | `review-verdict` |
 | `review-verdict` | `inconclusive` | `both` | `aggregate-strategic-decision-and-actionable-defect-are-absent-and-required-evidence-is-missing` | `review-inconclusive` | `review-verdict` |
-| `reconciliation-verdict` | `complete` | `both` | `merge-reconciliation-is-complete-and-evidenced` | `implementation-complete` | `reconciliation-verdict` |
-| `reconciliation-verdict` | `human-decision` | `both` | `merge-is-observed-but-acceptance-needs-decision` | `reconciliation-human-decision` | `reconciliation-verdict` |
-| `reconciliation-verdict` | `inconclusive` | `both` | `merge-identity-or-acceptance-evidence-is-missing` | `reconciliation-inconclusive` | `reconciliation-verdict` |
+| `reconciliation-verdict` | `complete` | `both` | `aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-present-and-complete-is-evidenced` | `implementation-complete` | `reconciliation-verdict` |
+| `reconciliation-verdict` | `human-decision` | `both` | `aggregate-reconciliation-decision-is-required` | `reconciliation-human-decision` | `reconciliation-verdict` |
+| `reconciliation-verdict` | `inconclusive` | `both` | `aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-missing` | `reconciliation-inconclusive` | `reconciliation-verdict` |
 
 ## Maestro labels
 

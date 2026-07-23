@@ -1,0 +1,9 @@
+case_id	decision_required	missing_identity_or_evidence	complete_and_evidenced	expected_verdict
+all_absent	absent	absent	absent	invalid
+decision_only	present	absent	absent	human-decision
+decision_and_missing	present	present	absent	human-decision
+decision_and_complete	present	absent	present	human-decision
+decision_missing_complete	present	present	present	human-decision
+missing_only	absent	present	absent	inconclusive
+missing_and_complete	absent	present	present	inconclusive
+complete_only	absent	absent	present	complete

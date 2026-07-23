@@ -25,6 +25,12 @@ Require every field in `Required review identity`. Re-read the Linear issue,
 approved contract/DAG revision, GitHub PR, current head, checks/reviews, upstream
 issues, downstream issues, and Symphony goal.
 
+Consume only a durably confirmed request whose exact head, governance revisions,
+complete required evidence manifest, applicable matching decision-resolutions,
+review input revision, and Review PR action identity match this invocation.
+
+rule symphony-review-consume-event-review-requested | when canonical-review-input-revision-is-durably-confirmed | consume event `review-requested` | next review-revision-eligible | choice none
+
 Return `inconclusive` without creating a worktree when:
 
 - a required native identity is absent;
@@ -113,6 +119,7 @@ Dispatch the selected reviewers in parallel with a self-contained envelope:
 
 ```text
 full Required review identity
+confirmed review-requested record and exact review input revision
 Symphony outcome and constraints
 implementation issue contract and acceptance criteria
 approved DAG revision
@@ -128,8 +135,9 @@ No reviewer receives permission to edit or publish.
 
 ## Validate and aggregate
 
-Reject a result whose reviewed PR, head SHA, contract revision, or review-policy
-revision differs from the request.
+Reject a result whose reviewed PR, head SHA, contract revision, DAG revision,
+review-policy revision, review input revision, or Review PR action identity
+differs from the request.
 
 Deduplicate identical underlying findings while preserving sources. Retain
 distinct concerns on the same line. Validate every requested outcome against
@@ -194,9 +202,11 @@ If it cannot approve, post one top-level PR comment recording the passed Symphon
 review and exact SHA.
 
 Every formal review or fallback comment embeds
-`Maestro-Review-Action-Identity: <review action identity>`. Search that marker on
-the exact PR/head before publication and after an ambiguous response; suppress
-retry and Linear follow-up until exactly one canonical GitHub record is confirmed.
+`Maestro-Review-Input-Revision: <review input revision>` and
+`Maestro-Review-Action-Identity: <review action identity>`. Search the full
+GitHub publication identity on the exact PR/head/input revision before
+publication and after an ambiguous response; suppress retry and Linear follow-up
+until exactly one canonical GitHub record is confirmed.
 
 For `changes-required`, submit one consolidated request-changes review when
 permitted; otherwise post the same content as one top-level PR comment. Each
@@ -209,7 +219,7 @@ is the only implementation follow-up channel.
 After the canonical GitHub record is confirmed, add one Linear comment mentioning
 `@Cursor`, with the exact reviewed SHA, review/comment link, and concise numbered
 required outcomes. Embed
-`Maestro-Cursor-Follow-Up-Identity: <review action identity + linear-cursor-follow-up channel>`,
+`Maestro-Cursor-Follow-Up-Identity: <review action identity + linear-cursor-follow-up channel + review input revision>`,
 search before create and after an ambiguous response, and link exactly one
 confirmed canonical GitHub record. This Linear comment is the implementation
 follow-up channel.
@@ -219,21 +229,22 @@ prior/resume phase. Apply `maestro:scope-change` for a strategic contract/DAG
 revision or `maestro:needs-human` for a bounded decision. Do not mention `@Cursor`
 unless Cursor has a concrete implementation action.
 
-rule symphony-review-apply-label-maestro-scope-change | when entity-scoped-strategic-drift-is-confirmed | apply label `maestro:scope-change` | next entity-scope-change | choice entity-phase
+rule symphony-review-apply-label-maestro-scope-change | when entity-scoped-pause-is-confirmed-and-strategic-authority-is-required | apply label `maestro:scope-change` | next entity-scope-change | choice entity-phase
 
-rule symphony-review-apply-label-maestro-needs-human | when entity-scoped-bounded-pause-is-confirmed | apply label `maestro:needs-human` | next entity-needs-human | choice entity-phase
+rule symphony-review-apply-label-maestro-needs-human | when entity-scoped-pause-is-confirmed-and-strategic-authority-is-not-required | apply label `maestro:needs-human` | next entity-needs-human | choice entity-phase
 
 For `inconclusive`, publish only when the missing evidence itself requires action.
 Otherwise append `action-failed` and allow bounded retry.
 
 Append one `review-recorded` event for a confirmed published `pass`,
-`changes-required`, or `human-decision` result, with the action identity, attempt,
-exact SHA, outcome, evidence link, and next transition. Also append
-`human-decision-required` for the latter. For an unpublished `inconclusive`
+`changes-required`, `human-decision`, or actionable `inconclusive` result, with
+the action identity, review input revision, attempt, exact SHA, outcome, evidence
+link, and next transition. Also append `human-decision-required` for a
+`human-decision` result. For an unpublished `inconclusive`
 attempt, append `action-failed` with its finite failure category. Use
 `review-stale-head` and `cleanup-failed` only as declared by the core vocabulary.
 
-rule symphony-review-append-event-review-recorded | when canonical-exact-head-review-record-is-confirmed | append event `review-recorded` | next review-gate-recorded | choice none
+rule symphony-review-append-event-review-recorded | when canonical-exact-head-and-input-revision-review-record-is-confirmed | append event `review-recorded` | next review-gate-recorded | choice none
 
 rule symphony-review-append-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | append event `review-stale-head` | next review-new-head | choice none
 
@@ -273,6 +284,7 @@ Return to `symphony-reconcile`:
 ## Symphony review result
 Outcome:
 Review action identity:
+Review input revision:
 Reviewed head:
 GitHub record:
 Linear @Cursor follow-up:

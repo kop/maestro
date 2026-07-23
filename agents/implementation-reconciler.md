@@ -35,12 +35,13 @@ is a hard inconclusive result.
 5. Propose only bounded downstream edits allowed by the protocol.
 6. Name every change requiring explicit user approval.
 
-The reconciler identity is the complete `Merge identity` table below. Return
-`complete` only when it exactly matches the request and every acceptance criterion
-is marked `satisfied` with concrete evidence. Return `human-decision` when the
-merge is observable but a bounded or strategic decision prevents acceptance.
-Return `inconclusive` when identity or acceptance evidence is missing. A confirmed
+The reconciler identity is the complete `Merge identity` table below. Normalize exactly three booleans: decision required, identity or required evidence missing, and complete and evidenced. Apply total precedence once: return
+`human-decision` whenever decision is required; otherwise return `inconclusive`
+when identity or required evidence is missing; otherwise return `complete` only
+when complete is evidenced. Any remaining combination is invalid. A confirmed
 merge is evidence of delivery, never evidence that acceptance is satisfied.
+Every confirmed unsatisfied acceptance criterion that needs disposition sets decision required, whether the disposition is bounded or strategic and whether
+other reconciliation evidence is missing.
 For every `follow-up-required` item, derive and return `follow_up_key` exactly as
 the Linear contract specifies. The display `Follow-up key` must repeat the same
 value; the controller recomputes it from the source issue UUID, merge SHA, and
@@ -48,11 +49,11 @@ normalized discovered gap before any create.
 
 Return exactly the reconciliation verdict selected by those conditions:
 
-rule implementation-reconciler-return-reconciliation-verdict-complete | when merge-reconciliation-is-complete-and-evidenced | return reconciliation verdict `complete` | next implementation-complete | choice reconciliation-verdict
+rule implementation-reconciler-return-reconciliation-verdict-complete | when aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-present-and-complete-is-evidenced | return reconciliation verdict `complete` | next implementation-complete | choice reconciliation-verdict
 
-rule implementation-reconciler-return-reconciliation-verdict-human-decision | when merge-is-observed-but-acceptance-needs-decision | return reconciliation verdict `human-decision` | next reconciliation-human-decision | choice reconciliation-verdict
+rule implementation-reconciler-return-reconciliation-verdict-human-decision | when aggregate-reconciliation-decision-is-required | return reconciliation verdict `human-decision` | next reconciliation-human-decision | choice reconciliation-verdict
 
-rule implementation-reconciler-return-reconciliation-verdict-inconclusive | when merge-identity-or-acceptance-evidence-is-missing | return reconciliation verdict `inconclusive` | next reconciliation-inconclusive | choice reconciliation-verdict
+rule implementation-reconciler-return-reconciliation-verdict-inconclusive | when aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-missing | return reconciliation verdict `inconclusive` | next reconciliation-inconclusive | choice reconciliation-verdict
 
 ## Result contract
 

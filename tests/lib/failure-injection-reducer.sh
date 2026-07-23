@@ -179,7 +179,141 @@ reduce_controller_state() {
     predicate["$key"]=$value
   done
 
-  if [[ "${predicate[surface]:-}" == "validation" &&
+  if [[ "${predicate[surface]:-}" == "review" &&
+        "${predicate[head]:-}" == "same" &&
+        "${predicate[request_event]:-}" == "recorded" &&
+        "${predicate[current_result]:-}" == "absent" &&
+        "${predicate[verdict]:-}" == "inconclusive" &&
+        "${predicate[publication]:-}" == "confirmed" &&
+        "${predicate[missing_evidence]:-}" == "actionable" ]]; then
+    emit_action_plan none \
+      current-review-input,review-requested,review-publication \
+      none review-recorded merge-ready,duplicate-publication \
+      current-revision-inconclusive-recorded
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "absent" &&
+          "${predicate[current_result]:-}" == "absent" ]]; then
+    emit_action_plan none \
+      fresh-provider-evidence,decision-resolutions,review-requested,current-review-result \
+      none review-requested \
+      review-dispatch,prior-review-satisfies-current,prior-review-blocks-current,merge-ready \
+      await-review-request-record
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "pass-recorded" &&
+          "${predicate[publication]:-}" == "confirmed" ]]; then
+    emit_action_plan none \
+      current-review-input,review-requested,current-review-result \
+      none none review-dispatch,duplicate-publication current-review-pass
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "inconclusive-recorded" &&
+          "${predicate[publication]:-}" == "confirmed" ]]; then
+    emit_action_plan none \
+      current-review-input,review-requested,current-review-result \
+      none none review-dispatch,duplicate-publication,merge-ready \
+      await-changed-evidence-or-input-revision
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "human-decision-recorded" ]]; then
+    if [[ "${predicate[resolution_event]:-}" == "recorded" &&
+          "${predicate[resolution_match]:-}" == "stale" ]]; then
+      emit_action_plan none \
+        current-review-input,review-requested,current-review-result,decision-resolved \
+        none none review-dispatch,remove-pause-label,merge-ready \
+        human-decision-paused-stale-resolution
+    else
+      emit_action_plan none \
+        current-review-input,review-requested,current-review-result,decision-resolved \
+        none none review-dispatch,remove-pause-label,merge-ready \
+        human-decision-paused
+    fi
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "changes-required-recorded" &&
+          "${predicate[inputs_changed]:-}" == "false" ]]; then
+    emit_action_plan none \
+      current-review-input,review-requested,current-review-result \
+      none none review-dispatch,duplicate-publication,merge-ready \
+      await-new-head-contract-policy-or-input-revision
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "absent" &&
+          "${predicate[verdict]:-}" == "pass" &&
+          "${predicate[publication]:-}" == "confirmed" ]]; then
+    emit_action_plan none \
+      current-review-input,review-requested,review-publication \
+      record-current-review-pass review-recorded \
+      older-review-result,duplicate-publication current-review-pass
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "absent" &&
+          "${predicate[verdict]:-}" == "inconclusive" &&
+          "${predicate[publication]:-}" == "unpublished" ]]; then
+    emit_action_plan observation-incomplete \
+      current-review-input,review-requested,review-publication \
+      none action-failed review-recorded,merge-ready \
+      inconclusive-bounded-retry
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "absent" &&
+          "${predicate[prior_result]:-}" == "human-decision" &&
+          "${predicate[resolution_event]:-}" == "recorded" &&
+          "${predicate[resolution_match]:-}" != "exact" ]]; then
+    emit_action_plan none \
+      fresh-provider-evidence,decision-resolutions,review-requested,current-review-result \
+      none none \
+      review-dispatch,prior-review-satisfies-current,remove-pause-label,merge-ready \
+      human-decision-paused-stale-resolution
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "absent" &&
+          "${predicate[prior_result]:-}" == "pass" ]]; then
+    emit_action_plan none \
+      current-review-input,review-requested,current-review-result \
+      dispatch-review none prior-review-satisfies-current,merge-ready \
+      review-current-input-revision
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "absent" ]]; then
+    emit_action_plan none \
+      fresh-provider-evidence,decision-resolutions,review-requested,current-review-result \
+      dispatch-review none \
+      prior-review-satisfies-current,prior-review-blocks-current,merge-ready \
+      review-current-input-revision
+  elif [[ "${predicate[surface]:-}" == "pause-restoration" &&
+          "${predicate[fresh_session]:-}" == "true" &&
+          "${predicate[pause_event]:-}" == "recorded" &&
+          "${predicate[pause_class]:-}" == "strategic" &&
+          "${predicate[native_label]:-}" == "missing" &&
+          "${predicate[resolution_event]:-}" == "absent" ]]; then
+    emit_action_plan none \
+      pause-event,pause-classification,native-labels,decision-resolved \
+      apply-scope-change none \
+      apply-needs-human,remove-pause-label,resume-phase,downstream-unlock \
+      strategic-pause-restored
+  elif [[ "${predicate[surface]:-}" == "pause-restoration" &&
+          "${predicate[fresh_session]:-}" == "true" &&
+          "${predicate[pause_event]:-}" == "recorded" &&
+          "${predicate[pause_class]:-}" == "bounded" &&
+          "${predicate[native_label]:-}" == "missing" &&
+          "${predicate[resolution_event]:-}" == "absent" ]]; then
+    emit_action_plan none \
+      pause-event,pause-classification,native-labels,decision-resolved \
+      apply-needs-human none \
+      apply-scope-change,remove-pause-label,resume-phase,downstream-unlock \
+      bounded-pause-restored
+  elif [[ "${predicate[surface]:-}" == "validation" &&
         "${predicate[command]:-}" == "timed-out" ]]; then
     if [[ "${predicate[owned_path]:-}" == "known" ]] &&
        attached_cleanup_is_safe \

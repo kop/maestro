@@ -11,6 +11,7 @@ Do not begin until the request identifies:
 Symphony control issue UUID
 implementation issue UUID and human-readable key
 approved contract revision
+approved DAG revision
 review-policy revision
 repository owner/name and local source or clone URL
 GitHub PR native ID and number
@@ -18,10 +19,28 @@ base SHA
 exact PR head SHA
 applicable risk labels
 issue validation commands
+complete required lens/validator evidence manifest
+applicable matching decision-resolution identities and governing revisions
+review input revision and confirmed review-requested event identity
 review action identity
 ```
 
 Missing identity makes the review `inconclusive`; it never permits guessing.
+
+Derive the review input revision exactly as the core protocol specifies. Use the
+fully qualified roster agent identifier as a lens stable key. Derive every
+validator stable key from its protocol kind and normalized command/inspection
+descriptor, and derive each present `review-evidence-v1:` revision from the
+complete ordered agent/selector or command/configuration/capability source set.
+The manifest contains every required lens and validator with an explicit
+`present`, `missing`, or `unavailable` state and the matching derived evidence
+revision or the literal `missing`/`unavailable` sentinel. Free-form keys,
+hand-authored revisions, and omitted source revisions are invalid. Include only
+confirmed decision-resolutions that exactly match the pause identity and
+governing revision. The review input revision is part of the Review PR action identity:
+GitHub PR native ID, head SHA, contract revision, DAG revision, review-policy
+revision, and exact review input revision. Do not begin review until the matching
+canonical `review-requested` record is confirmed.
 
 ## Owned worktree protocol
 
@@ -112,7 +131,10 @@ pass | changes-required | human-decision | inconclusive
 PR:
 Head SHA:
 Contract revision:
+DAG revision:
 Review-policy revision:
+Review input revision:
+Review action identity:
 
 ## Findings
 - Severity:
@@ -147,8 +169,12 @@ The attachment-state cleanup branch applies on success, failure, timeout, stale 
 
 ## Publication and Cursor follow-up
 
-- Embed `Maestro-Review-Action-Identity: <review action identity>` in every
-  GitHub review or fallback PR comment. Search the exact PR/head before publication and after an ambiguous response before retrying that marker.
+- The GitHub publication identity includes the Review PR action identity, exact PR/head channel, and exact review input revision. Embed
+  `Maestro-Review-Input-Revision: <review input revision>` and
+  `Maestro-Review-Action-Identity: <review action identity>` in every GitHub
+  review or fallback PR comment. Search the full publication identity on the
+  exact PR/head before publication and after an ambiguous response before
+  retrying.
 - Pass: submit approval when the authenticated identity may do so; otherwise post
   one top-level PR comment recording the passed Symphony review.
 - Changes required: submit request-changes when permitted; otherwise post one
@@ -156,8 +182,10 @@ The attachment-state cleanup branch applies on success, failure, timeout, stale 
 - Human decision: post a non-approving review/comment, record prior/resume phase,
   and apply `maestro:scope-change` for a strategic contract/DAG revision or
   `maestro:needs-human` for a bounded decision.
-- Inconclusive: post only when the missing evidence itself requires action;
-  otherwise append `action-failed` and retry within policy.
+- Inconclusive: post only when the missing evidence itself requires action. A
+  confirmed publication for the exact head and review input revision appends
+  `review-recorded`; when publication is not warranted or is not confirmed,
+  append `action-failed` and retry within policy.
 
 For changes required, add one Linear issue comment after the canonical GitHub
 record:
@@ -174,10 +202,12 @@ Required outcomes:
 ```
 
 Embed
-`Maestro-Cursor-Follow-Up-Identity: <review action identity + linear-cursor-follow-up channel>`
+`Maestro-Cursor-Follow-Up-Identity: <review action identity + linear-cursor-follow-up channel + review input revision>`
 in this comment. Search the implementation issue for the marker before create and
 after an ambiguous response. The comment links exactly one confirmed canonical GitHub record; an unresolved or duplicate GitHub record suppresses the Linear
 follow-up.
+
+The Linear follow-up publication identity includes the Review PR action identity, `linear-cursor-follow-up` channel, implementation issue UUID, and exact review input revision.
 
 Use the actual PR, SHA, review link, and consolidated outcomes. Do not mention
 `@Cursor` for a pure human decision unless Cursor has a concrete implementation
