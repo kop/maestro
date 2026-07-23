@@ -37,7 +37,7 @@ links to:
 - discovery evidence;
 - DAG revisions and approvals;
 - approved execution waves;
-- the current orchestration snapshot; and
+- an append-only orchestration journal; and
 - the final as-built outcome.
 
 The Symphony lifecycle is not a single plan-then-execute sequence. It may alternate
@@ -72,7 +72,8 @@ More discovery/planning or final verification
   local services, Playwright, linters, and domain validators.
 - Dispatch read-only research, architecture, review, and reconciliation agents.
 - Delegate approved Linear issues to Cursor.
-- Submit approving or request-changes GitHub PR reviews.
+- Submit GitHub PR reviews when the authenticated identity is permitted to do so,
+  or publish equivalent findings as a PR comment.
 - Update undispatched downstream issues within the bounded replanning policy.
 
 ### Maestro must not
@@ -84,9 +85,9 @@ More discovery/planning or final verification
 - Take over ordinary CI or review-comment resolution from Cursor.
 - Dispatch an implementation subagent.
 
-Maestro has Bash in the first version. The no-implementation boundary is enforced
-by its instructions rather than by sandboxing or a command allowlist. This is a
-behavioral guardrail, not a security boundary.
+The Symphony skills use Bash in the first version. The no-implementation boundary
+is enforced by their instructions rather than by sandboxing or a command allowlist.
+This is a behavioral guardrail, not a security boundary.
 
 Build tools may create transient outputs, caches, screenshots, reports, and other
 validation artifacts. If a command unexpectedly changes tracked source, Maestro
@@ -105,8 +106,15 @@ Cursor is responsible for:
 - updating the PR until repository policy permits merging; and
 - explaining material deviations from the proposed approach.
 
-After initial Linear delegation, implementation feedback to Cursor is sent through
-GitHub PR reviews, not through Linear comments.
+After initial Linear delegation, the canonical implementation-review record is
+published on the GitHub PR. If the authenticated identity cannot submit a formal
+review, Maestro posts a top-level PR comment instead.
+
+Maestro then uses Cursor's documented follow-up channel: it adds a Linear issue
+comment mentioning `@Cursor`, links the PR review or comment, identifies the
+reviewed head SHA, and provides the concise action list. Cursor's public
+documentation explicitly supports `@Cursor` follow-up instructions in Linear
+comments. See [Cursor's Linear integration](https://docs.cursor.com/en/integrations/linear).
 
 ### Repository policy owns merge readiness
 
@@ -155,20 +163,20 @@ loop.
 
 ## Plugin components
 
-### Main agent
+### Skills-first orchestration
 
-`agents/maestro.md` becomes the Symphony control-plane identity.
+There is no special `maestro` main agent. The user starts from a normal Claude Code
+session and enters the workflow through the Symphony skills.
 
-It has:
+The skills load the shared Symphony protocol, authority boundaries, Linear schema,
+and reconciliation rules when needed. They expect the session to provide Linear
+and GitHub MCP access, repository read tools, Bash, Agent, Skill, and code-graph
+tools when available.
 
-- Linear and GitHub MCP access;
-- Read, Glob, Grep, Web, Bash, Agent, Skill, and task-tracking tools;
-- codebase-memory graph tools when available; and
-- access only to research, architecture, review, and reconciliation agents.
-
-It has no Edit, Write, or NotebookEdit tools. Bash remains capable of writing, so
-the agent instructions explicitly prohibit intentional source changes and remote
-implementation mutations.
+This avoids maintaining a custom agent whose effective capabilities are the same
+as the normal session. The no-implementation rule remains a workflow instruction:
+while running a Symphony skill, the main session may validate implementation but
+must not become the implementer.
 
 ### Public skills
 
@@ -191,7 +199,7 @@ implementation mutations.
 - Review unreviewed PR heads.
 - Continue discovery and planning.
 - Delegate newly ready issues with bounded parallelism.
-- Refresh the controller snapshot.
+- Append journal entries for material transitions.
 - Exit without sleeping or polling.
 
 The intended unattended invocation is:
@@ -265,6 +273,7 @@ The following current components conflict with the new identity or duplicate the
 external-agent workflow:
 
 ```text
+agents/maestro.md
 agents/peer.md
 agents/general-purpose.md
 agents/scribe.md
@@ -283,12 +292,14 @@ dispatch, contextual review, reconciliation, and drift handling.
 - sufficiently understood for planning; or
 - requiring discovery before an implementation DAG can be approved.
 
-Starting a Symphony authorizes read-only discovery. Discovery issues are not
-implementation issues and are not delegated to Cursor.
+Starting a Symphony authorizes read-only discovery. Discovery is performed by
+Maestro research and architecture subagents. Discovery issues are not
+implementation issues and are never delegated to Cursor.
 
 ### Small discovery
 
-A bounded question and its result may be recorded directly under the Symphony
+The Symphony skill dispatches a `symphony-researcher` or `code-architect` subagent
+for the bounded question, then records the returned evidence directly under the
 control issue.
 
 ### Large or multi-repository discovery
@@ -306,7 +317,14 @@ Maestro creates explicit discovery issues with:
 ## Confidence and remaining unknowns
 ```
 
-For heterogeneous repository fleets, researchers produce a normalized matrix:
+The main Symphony session dispatches one or more `symphony-researcher` subagents
+with bounded parallelism. Each subagent investigates its assigned repository or
+question and returns a structured report to the main session. The main session
+posts the result to the corresponding discovery issue and performs the
+cross-repository synthesis. Cursor does not participate in discovery.
+
+For heterogeneous repository fleets, the research subagents produce a normalized
+matrix:
 
 | Repository | Stack | Integration point | Existing pattern | Shared contract impact | Validation | Confidence |
 |---|---|---|---|---|---|---|
@@ -377,26 +395,42 @@ The stable description contains:
 The original outcome and constraints are preserved. Completion data is appended
 rather than replacing the original intent.
 
-### Controller snapshot
+### Append-only orchestration journal
 
-Maestro maintains one editable comment:
+Maestro does not overwrite one controller-snapshot comment. It appends a structured
+comment whenever a material event occurs:
 
-```yaml
-phase: discovery | planning | executing | verifying | complete | blocked
-dag_revision: 3
-approved_waves: [1, 2]
-max_parallel_issues: 3
-active_issues: [ABC-123, ABC-127]
-pending_discovery: [ABC-140]
-needs_attention: []
-node_bindings:
-  N01: ABC-123
-  N02: ABC-127
-last_reconciled_at: 2026-07-23T14:20:00+03:00
+- Symphony started or resumed;
+- discovery dispatched or completed;
+- a planning assumption changed;
+- a DAG revision was proposed, approved, or rejected;
+- a wave or issue was dispatched;
+- a PR review produced findings or passed;
+- drift was detected or resolved;
+- a merge was reconciled;
+- downstream work was changed; or
+- a wave or Symphony completed.
+
+Each journal comment contains:
+
+```markdown
+## Maestro · <event>
+
+Observed:
+Action:
+Evidence:
+Decision rationale:
+Affected issues or PRs:
+Next expected transition:
 ```
 
-The snapshot is a cache for orientation, not the ultimate source of truth.
-Reconciliation verifies it against Linear, GitHub, and action records.
+The journal records observable facts, evidence, decisions, and concise rationale.
+It does not attempt to expose hidden model reasoning. Unchanged polling results such
+as "CI still pending" do not create comments.
+
+Every reconciliation reconstructs current state from Linear, GitHub, native
+relations, and the journal. `/maestro:symphony-status` synthesizes a current summary
+on demand rather than relying on a mutable snapshot.
 
 ### Labels
 
@@ -429,6 +463,7 @@ Wave membership and detailed controller state do not become labels.
 ```markdown
 ## Objective
 ## Symphony contribution
+## Repository
 ## Scope
 ## Dependencies and consumed contracts
 ## Produced contracts
@@ -447,6 +482,34 @@ Wave membership and detailed controller state do not become labels.
 The proposed approach is guidance, not a mandatory internal implementation.
 Cursor may deviate when a different implementation is materially better, but it
 must not violate constraints or acceptance criteria without escalation.
+
+### Cursor repository routing
+
+Every Cursor implementation issue targets exactly one repository.
+
+Maestro applies a Linear issue label from the Cursor-defined label group named
+exactly `repo`. The child label is the GitHub repository in `owner/repository`
+format. For example:
+
+```text
+repo:firebolt-db/firebolt-core
+```
+
+The issue's `Repository` section contains the same `owner/repository` value for
+human readability. Before delegation, Maestro verifies that the field and issue
+label agree and does not rely on Cursor's project or dashboard default repository.
+
+Cursor's documented repository-selection order gives explicit issue text first,
+then issue labels, project labels, and finally the default repository. Maestro uses
+the issue-level `repo` label as its canonical routing mechanism. See
+[Cursor's Linear integration](https://docs.cursor.com/en/integrations/linear).
+Because `[repo=owner/repository]` text has higher priority, Maestro also scans the
+issue description and comments for that syntax. A conflicting value is semantic
+drift and blocks delegation until resolved.
+
+Work spanning multiple repositories is split into one implementation issue per
+repository and coordinated with native dependencies and produced/consumed
+contracts. It is not delegated to Cursor as one ambiguous multi-repository issue.
 
 ### Native identifiers and dependencies
 
@@ -506,7 +569,7 @@ set. Every reconciliation compares that approved state with current Linear state
 
 | Drift | Response |
 |---|---|
-| Missing Maestro label or stale snapshot | Repair automatically |
+| Missing generated Maestro label | Repair automatically |
 | Clearly stale workflow status | Normalize when unambiguous |
 | Objective, constraints, or acceptance criteria changed | Pause the affected subgraph |
 | Dependencies added, removed, or reversed | Pause affected dispatches and show the edge diff |
@@ -598,9 +661,10 @@ maximum active issues per repository: 1
 Same-repository concurrency may be approved when overlap analysis demonstrates
 that the work is independent.
 
-### 7. Update and exit
+### 7. Journal and exit
 
-Refresh the controller snapshot and end quietly unless:
+Append comments for material transitions completed during the pass and end quietly
+unless:
 
 - human input is required;
 - a DAG revision is ready for approval;
@@ -617,12 +681,12 @@ No subagent sleeps or polls. `/loop` owns repetition.
 For an unreviewed PR head:
 
 1. Locate or fetch the repository.
-2. Create a detached worktree at the exact head SHA beneath the configured Maestro
-   review root.
+2. Create a unique temporary directory and add a detached worktree at the exact
+   head SHA.
 3. Read repository instructions from that revision.
 4. Run risk-adaptive review and validation.
 5. Confirm that findings apply to the original head SHA.
-6. Submit one GitHub PR review.
+6. Submit one GitHub PR review or top-level PR comment.
 7. Remove every worktree and transient artifact.
 8. Run `git worktree prune` where appropriate.
 
@@ -630,32 +694,45 @@ Parallel reviewers that execute commands receive separate worktrees. Diff-only
 reviewers do not require one.
 
 Cleanup runs after success, failure, or reviewer error. A failed removal is recorded
-in a cleanup queue and retried on the next reconciliation pass. Maestro removes
-only worktrees under its configured review root.
+in the Symphony journal and retried on the next reconciliation pass. Maestro
+removes only temporary worktrees it created for that review.
 
 ### Review outcomes
 
 #### Pass
 
-Submit an approving GitHub PR review for the exact head SHA.
+If the authenticated identity may review the PR, submit an approving GitHub review
+for the exact head SHA. Otherwise, post a top-level PR comment recording that the
+Symphony review passed. In the latter case, repository merge policy must obtain its
+required approval from another human or bot.
 
 #### Changes required
 
-Submit a request-changes review with consolidated findings. Each finding includes:
+If permitted, submit a request-changes review with consolidated findings. If the
+PR was opened under the same identity and a formal review outcome is unavailable,
+post the same findings as one top-level PR comment.
+
+Each finding includes:
 
 - the violated issue criterion, Symphony goal, or dependency contract;
 - file and line where applicable;
 - evidence from code or executed validation; and
 - the required outcome, without supplying an implementation patch.
 
+After publishing the canonical PR record, comment on the Linear implementation
+issue with `@Cursor`, the reviewed head SHA, a link to the PR review or comment, and
+the concise required-action list.
+
 #### Human decision required
 
-Submit a non-approving PR review that explains the decision, then apply
-`maestro:needs-human` to the affected Linear issue.
+Submit a non-approving PR review or top-level comment that explains the decision,
+then apply `maestro:needs-human` to the affected Linear issue. Do not mention
+`@Cursor` unless there is a concrete implementation action Cursor can take.
 
-Cursor responds by updating the PR. A new head SHA triggers another review. The new
-review focuses on the delta and unresolved Symphony concerns unless scope or the
-governing contract changed materially.
+Cursor receives changes-required instructions through the documented Linear
+`@Cursor` follow-up and updates the PR. A new head SHA triggers another review. The
+new review focuses on the delta and unresolved Symphony concerns unless scope or
+the governing contract changed materially.
 
 ## Post-merge reconciliation
 
@@ -725,13 +802,15 @@ to a daemon-backed design.
 Before creating a Symphony, verify:
 
 - Linear read and write access;
-- GitHub read access and the ability to submit approving and request-changes
-  reviews from an identity permitted to review the managed repositories;
+- GitHub read and PR-comment access;
+- whether the authenticated GitHub identity can submit formal approvals and
+  request-changes outcomes on the managed PRs;
 - Cursor is installed as a Linear delegation target;
-- configured company workspace roots exist;
-- the review root can be created and cleaned;
-- required repositories can be read or cloned; and
-- the session is running under the Maestro agent.
+- the Linear `repo` label group and required `owner/repository` child labels exist
+  or can be created;
+- required repositories can be found in the available workspaces or cloned;
+- temporary review worktrees can be created and removed; and
+- Linear `@Cursor` comments reach the delegated agent.
 
 Missing capabilities are reported as:
 
@@ -739,19 +818,9 @@ Missing capabilities are reported as:
 - reduced-functionality warnings; or
 - repository-specific discovery work.
 
-## Runtime configuration
-
-Environment-specific values live in a small user-level configuration:
-
-```yaml
-workspace_roots:
-  - /path/to/company/repos
-review_root: /path/to/maestro/reviews
-cursor_linear_agent: Cursor
-default_max_parallel_cursor: 3
-default_max_per_repository: 1
-```
-
+There is no Maestro runtime-configuration file. Repository locations are discovered
+from the current workspace and additional directories, then cloned into temporary
+locations when absent. Review worktrees use unique temporary directories.
 Symphony-specific scope, repositories, review risks, concurrency, and execution
 policy live in the control issue.
 
@@ -761,19 +830,24 @@ policy live in the control issue.
 
 - Validate manifest and agent/skill frontmatter.
 - Verify `symphony-review` is `user-invocable: false`.
-- Verify Maestro has no Edit, Write, NotebookEdit, implementation agent, or scribe.
+- Verify no custom main `maestro` agent is installed or required.
+- Verify the Symphony skills prohibit implementation and never dispatch an
+  implementation agent or scribe.
 - Verify peer, standalone review, autopilot, and stacked-PR components are absent.
-- Verify every skill uses the shared contract, label, identity, and result formats.
+- Verify every skill uses the shared contract, journal, label, identity, and result
+  formats.
 
 ### Controller scenarios
 
 - Fully specified single-repository Symphony.
 - Discovery-first heterogeneous repository fleet.
+- Discovery performed by research subagents rather than Cursor.
 - Multiple approved DAG waves.
 - Bounded parallel dispatch.
 - Re-running a pass without duplicate issues, reviews, comments, or delegations.
 - Manual description, status, label, dependency, executor, and PR-link drift.
 - Repeated PR head changes.
+- Correct issue-level `repo` labels route each Cursor task to one repository.
 - CI failure without Maestro attempting a fix.
 - Bot approval satisfying the approval requirement.
 - Merge preceding Linear automation.
@@ -787,8 +861,9 @@ policy live in the control issue.
 - Repository instructions are read from that revision.
 - Playwright and other repository-specific validation can run.
 - Tracked source changes are never delivered.
-- Pass submits approval.
-- Findings submit request changes.
+- Pass submits approval when allowed and otherwise records a PR comment.
+- Findings request changes when allowed and otherwise use a PR comment.
+- Changes-required findings trigger a Linear `@Cursor` follow-up.
 - Worktrees are removed after success, validation failure, and reviewer failure.
 - Failed cleanup is queued and retried.
 
@@ -822,13 +897,13 @@ skills/
 └── symphony-review/SKILL.md
 ```
 
-Shared protocol references define the Symphony contract, issue template, controller
-snapshot, labels, action identities, review result, and reconciliation result once.
+Shared protocol references define the Symphony contract, issue template,
+orchestration-journal events, labels, action identities, review result, and
+reconciliation result once.
 
 ### Change
 
 ```text
-agents/maestro.md
 agents/code-architect.md
 agents/code-reviewer.md
 agents/security-reviewer.md
@@ -843,6 +918,7 @@ README.md
 ### Remove
 
 ```text
+agents/maestro.md
 agents/peer.md
 agents/general-purpose.md
 agents/scribe.md
