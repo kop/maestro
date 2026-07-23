@@ -26,4 +26,23 @@ assert_contains agents/implementation-reconciler.md 'implementation issue UUID'
 assert_contains agents/implementation-reconciler.md '^Issue UUID:$'
 assert_contains agents/implementation-reconciler.md '^Merge SHA:$'
 
+for path in \
+  agents/code-reviewer.md \
+  agents/security-reviewer.md \
+  agents/test-analyzer.md \
+  agents/comment-analyzer.md
+do
+  assert_file "$path"
+  assert_not_contains "$path" '^tools:.*(Write|Edit|Agent)'
+  assert_contains "$path" '\$\{CLAUDE_PLUGIN_ROOT\}/references/symphony/review.md'
+  assert_contains "$path" 'Common finding contract'
+  assert_contains "$path" 'exact PR head SHA'
+done
+
+assert_contains agents/code-reviewer.md '[Rr]endered infrastructure'
+assert_contains agents/code-reviewer.md 'runtime toolchain'
+assert_contains agents/security-reviewer.md 'Symphony dependency contract'
+assert_contains agents/test-analyzer.md 'acceptance criterion'
+assert_contains agents/comment-analyzer.md 'contract or interface documentation'
+
 pass "contextual review agents"
