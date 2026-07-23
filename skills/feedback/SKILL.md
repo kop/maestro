@@ -1,39 +1,42 @@
 ---
 name: feedback
-description: Use when the user wants a retrospective on how the maestro plugin performed this session — which agents and skills were used, what worked, what was weak or missing, and what agents/skills would help future sessions. Triggered by /feedback.
+description: Retrospective on how Maestro's Symphony control plane performed in this session: discovery, Linear DAG planning, Cursor dispatch, contextual PR review, merge reconciliation, drift handling, and recovery. Report only; never edits files or external systems.
 ---
 
-# Feedback — retrospective on the maestro plugin
+# Feedback on a Maestro Symphony session
 
-You have just spent a whole session using (or trying to use) the maestro plugin's agents and skills. This skill turns that lived experience into a critique of the plugin. Run it at the end of a long session, while the session's detail is still in context.
+Produce a chat report only. Write no files and mutate no external system.
 
-Produce a report in the chat. Write no files and make no edits — the user acts on the report themselves.
+Every judgment must cite a specific event from this session. Reconstruct which
+Maestro skills and agents were actually used; do not evaluate an unused component.
+An honest non-use signal is valid evidence.
 
-## The core principle
+## Report
 
-**Every judgment cites a specific moment from THIS session.** A retrospective is only worth reading if it is grounded in what actually happened — which agent you dispatched, what it returned, where a skill's guidance was wrong, where you worked around a missing capability. Generic plugin commentary the user could have written without you is worthless.
+1. **Session recap** — Symphony goal, repositories, approved waves, and components
+   exercised.
+2. **What worked** — concrete discovery, planning, dispatch, review,
+   reconciliation, or recovery moments that earned their cost.
+3. **Friction and weaknesses** — exact component, event, failure mode, workaround,
+   and cost.
+4. **Protocol or component changes** — exact existing file and behavioral change
+   tied to a friction item.
+5. **New agents or skills** — only recurring gaps that do not already belong in a
+   current Symphony component.
 
-If a component was not exercised this session, say so and do not evaluate it. An honest "not used" beats an invented verdict. The most valuable parts of the report are the failures and the gaps, not the praise.
+Evaluate, when exercised:
 
-## Scope
+- whether discovery removed the right uncertainty before planning;
+- whether issue contracts, repository routing, and dependency edges were precise;
+- whether approved waves and dispatch ordering were safe;
+- whether Cursor, rather than Maestro, owned implementation and PR convergence;
+- whether reviews used the exact SHA and whole-Symphony context;
+- whether validators and CI runtime assumptions were checked;
+- whether worktrees were ownership-safe and cleaned;
+- whether merged reality correctly updated downstream issues;
+- whether manual Linear drift and ambiguous writes were handled without duplicate
+  actions;
+- whether `/loop` stayed quiet while nothing material changed.
 
-- **Maestro plugin** — the agents and skills that were actually invoked this session (reconstruct these from the conversation, not from memory of what the plugin offers).
-- **Workflow gaps** — friction this session that points to a NEW agent or skill worth adding, even outside the plugin's current scope.
-
-## The report
-
-Five sections, in this order. Skip a section only if the session produced nothing real for it, and say why.
-
-1. **Session recap** — two or three sentences: what the session was doing, and which maestro agents/skills were actually invoked. This grounds everything below.
-
-2. **What worked** — components that earned their place. Per item: the component, the moment it helped, and what specifically was good about the result.
-
-3. **Friction & weaknesses** — where the plugin underperformed. Per item: the component, the moment, what went wrong (weak output, wrong or missing guidance, wrong model tier, a workaround you had to invent), and the concrete cost.
-
-4. **Proposed changes** — concrete edits to EXISTING maestro agents or skills, each tied to a friction item above. Name the file, the change, and the friction it resolves.
-
-5. **New agents or skills** — gaps that warrant something new. Per idea: a one-line `description`-style trigger, what it would do, and the session moment that motivates it. Distinguish "I hit this repeatedly" from "this might help once."
-
-## Before you write
-
-Reconstruct what actually happened this session — scan the conversation for maestro agent dispatches and skill invocations rather than reasoning from memory of what the plugin offers. If the session barely touched the plugin, the honest report is short: say what little was exercised and stop. Do not pad it to look thorough.
+Do not manufacture praise. Distinguish a component defect from a component that
+was simply never invoked.
