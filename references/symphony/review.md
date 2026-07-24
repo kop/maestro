@@ -8,7 +8,7 @@ approved DAG, dependency contracts, downstream work, and Symphony outcome.
 Do not begin until the request identifies:
 
 ```text
-Symphony control issue UUID
+Symphony UUID and control issue UUID
 implementation issue UUID and human-readable key
 approved contract revision
 approved DAG revision
@@ -20,6 +20,9 @@ exact PR head SHA
 applicable risk labels
 issue validation commands
 complete required lens/validator evidence manifest
+durably confirmed review-source-requirements-v1 record and revision
+review-source-closure-v1 descriptor and revision
+complete acceptance-evidence manifest and revision
 applicable matching decision-resolution identities and governing revisions
 review input revision and confirmed review-requested event identity
 review action identity
@@ -27,19 +30,21 @@ review action identity
 
 Missing identity makes the review `inconclusive`; it never permits guessing.
 
-Derive the review input revision exactly as the core protocol specifies. Use the
-fully qualified roster agent identifier as a lens stable key. Derive every
-validator stable key from its protocol kind and normalized command/inspection
-descriptor, and derive each present `review-evidence-v1:` revision from the
-complete ordered agent/selector or command/configuration/capability source set.
+Derive the review input revision exactly as the core protocol specifies. Run the
+fixed `review-source-closure-v1` algorithm over only declared exact source paths
+and require exact correspondence with the confirmed source-requirements record.
+Use the fully qualified roster agent identifier as a lens stable key, derive
+every validator key from its finite kind and normalized command, and resolve
+exactly one typed manifest entry for every contract `evidence_key`.
 The manifest contains every required lens and validator with an explicit
 `present`, `missing`, or `unavailable` state and the matching derived evidence
 revision or the literal `missing`/`unavailable` sentinel. Free-form keys,
 hand-authored revisions, and omitted source revisions are invalid. Include only
 confirmed decision-resolutions that exactly match the pause identity and
 governing revision. The review input revision is part of the Review PR action identity:
-GitHub PR native ID, head SHA, contract revision, DAG revision, review-policy
-revision, and exact review input revision. Do not begin review until the matching
+Symphony UUID, implementation issue UUID, GitHub PR native ID, base SHA, head
+SHA, contract revision, DAG revision, review-policy revision, and exact review
+input revision. Do not begin review until the matching
 canonical `review-requested` record is confirmed.
 
 ## Owned worktree protocol
@@ -123,12 +128,18 @@ label-selected lens.
 
 Every reviewer returns:
 
+Reviewed identity repeats Symphony UUID, Implementation issue UUID, PR native ID, Base SHA, Head SHA, contract revision, DAG revision, review-policy revision, review input revision, and review action identity.
+
 ```markdown
 ## Verdict
 pass | changes-required | human-decision | inconclusive
 
 ## Reviewed identity
-PR:
+Symphony UUID:
+Implementation issue UUID:
+PR native ID:
+PR number:
+Base SHA:
 Head SHA:
 Contract revision:
 DAG revision:
@@ -169,7 +180,8 @@ The attachment-state cleanup branch applies on success, failure, timeout, stale 
 
 ## Publication and Cursor follow-up
 
-- The GitHub publication identity includes the Review PR action identity, exact PR/head channel, and exact review input revision. Embed
+- The GitHub publication identity repeats the complete review context, exact review input revision, Review PR action identity, and exact channel. Embed
+  `Maestro-GitHub-Review-Publication-Identity: <publication identity>`,
   `Maestro-Review-Input-Revision: <review input revision>` and
   `Maestro-Review-Action-Identity: <review action identity>` in every GitHub
   review or fallback PR comment. Search the full publication identity on the
@@ -182,10 +194,11 @@ The attachment-state cleanup branch applies on success, failure, timeout, stale 
 - Human decision: post a non-approving review/comment, record prior/resume phase,
   and apply `maestro:scope-change` for a strategic contract/DAG revision or
   `maestro:needs-human` for a bounded decision.
-- Inconclusive: post only when the missing evidence itself requires action. A
-  confirmed publication for the exact head and review input revision appends
-  `review-recorded`; when publication is not warranted or is not confirmed,
-  append `action-failed` and retry within policy.
+- Inconclusive: a durable `inconclusive` publication requires every verdict-relevant missing item in a stable acceptance manifest.
+  Every item has a criterion/evidence key, finite source kind,
+  deterministic provider locator, and `missing`/`unavailable` manifest entry
+  whose state can later change. A confirmed durable `inconclusive` publication
+  for the complete context appends `review-recorded`. Any unkeyed or free-form missing evidence is unpublished and appends `action-failed`; bounded recovery applies and no publication identity is consumed.
 
 For changes required, add one Linear issue comment after the canonical GitHub
 record:
@@ -202,12 +215,12 @@ Required outcomes:
 ```
 
 Embed
-`Maestro-Cursor-Follow-Up-Identity: <review action identity + linear-cursor-follow-up channel + review input revision>`
+`Maestro-Cursor-Follow-Up-Identity: <complete linear publication identity>`
 in this comment. Search the implementation issue for the marker before create and
 after an ambiguous response. The comment links exactly one confirmed canonical GitHub record; an unresolved or duplicate GitHub record suppresses the Linear
 follow-up.
 
-The Linear follow-up publication identity includes the Review PR action identity, `linear-cursor-follow-up` channel, implementation issue UUID, and exact review input revision.
+The Linear follow-up publication identity repeats the complete review context, exact review input revision, Review PR action identity, and `linear-cursor-follow-up` channel.
 
 Use the actual PR, SHA, review link, and consolidated outcomes. Do not mention
 `@Cursor` for a pure human decision unless Cursor has a concrete implementation

@@ -180,16 +180,67 @@ reduce_controller_state() {
   done
 
   if [[ "${predicate[surface]:-}" == "review" &&
-        "${predicate[head]:-}" == "same" &&
-        "${predicate[request_event]:-}" == "recorded" &&
-        "${predicate[current_result]:-}" == "absent" &&
-        "${predicate[verdict]:-}" == "inconclusive" &&
-        "${predicate[publication]:-}" == "confirmed" &&
-        "${predicate[missing_evidence]:-}" == "actionable" ]]; then
+        "${predicate[missing_evidence]:-}" == "unkeyed" &&
+        "${predicate[acceptance_manifest]:-}" == "incomplete" ]]; then
+    emit_action_plan observation-incomplete \
+      current-review-input,acceptance-evidence-manifest,review-publication \
+      none action-failed \
+      review-publication,review-recorded,merge-ready \
+      unkeyed-evidence-bounded-recovery
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[verdict]:-}" == "inconclusive" &&
+          "${predicate[missing_evidence]:-}" == "actionable" &&
+          "${predicate[acceptance_manifest]:-}" != "complete-keyed" ]]; then
+    emit_action_plan observation-incomplete \
+      current-review-input,acceptance-evidence-manifest,review-publication \
+      none action-failed \
+      review-publication,review-recorded,merge-ready \
+      unkeyed-evidence-bounded-recovery
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "absent" &&
+          "${predicate[verdict]:-}" == "inconclusive" &&
+          "${predicate[publication]:-}" == "confirmed" &&
+          "${predicate[missing_evidence]:-}" == "actionable" &&
+          "${predicate[acceptance_manifest]:-}" == "complete-keyed" ]]; then
     emit_action_plan none \
-      current-review-input,review-requested,review-publication \
+      current-review-input,review-requested,acceptance-evidence-manifest,review-publication \
       none review-recorded merge-ready,duplicate-publication \
       current-revision-inconclusive-recorded
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "absent" &&
+          "${predicate[current_result]:-}" == "absent" &&
+          ( "${predicate[acceptance_manifest]:-}" == "changed-keyed" ||
+            "${predicate[acceptance_manifest]:-}" == "provider-revision-changed" ) ]]; then
+    emit_action_plan none \
+      fresh-provider-evidence,acceptance-evidence-manifest,review-source-closure,decision-resolutions,review-requested,current-review-result \
+      none review-requested \
+      review-dispatch,prior-review-satisfies-current,prior-review-blocks-current,merge-ready \
+      await-review-request-record
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "absent" &&
+          "${predicate[acceptance_manifest]:-}" == "changed-keyed" &&
+          -z "${predicate[verdict]:-}" ]]; then
+    emit_action_plan none \
+      fresh-provider-evidence,acceptance-evidence-manifest,review-source-closure,decision-resolutions,review-requested,current-review-result \
+      dispatch-review none \
+      prior-review-satisfies-current,prior-review-blocks-current,merge-ready \
+      review-current-input-revision
+  elif [[ "${predicate[surface]:-}" == "review" &&
+          "${predicate[head]:-}" == "same" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[current_result]:-}" == "absent" &&
+          "${predicate[acceptance_manifest]:-}" == "changed-keyed" &&
+          "${predicate[verdict]:-}" == "pass" &&
+          "${predicate[publication]:-}" == "confirmed" ]]; then
+    emit_action_plan none \
+      current-review-input,review-requested,acceptance-evidence-manifest,review-publication \
+      record-current-review-pass review-recorded \
+      older-review-result,duplicate-publication current-review-pass
   elif [[ "${predicate[surface]:-}" == "review" &&
           "${predicate[head]:-}" == "same" &&
           "${predicate[request_event]:-}" == "absent" &&

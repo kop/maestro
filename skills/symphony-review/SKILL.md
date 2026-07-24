@@ -25,9 +25,12 @@ Require every field in `Required review identity`. Re-read the Linear issue,
 approved contract/DAG revision, GitHub PR, current head, checks/reviews, upstream
 issues, downstream issues, and Symphony goal.
 
-Consume only a durably confirmed request whose exact head, governance revisions,
-complete required evidence manifest, applicable matching decision-resolutions,
-review input revision, and Review PR action identity match this invocation.
+Consume only a durably confirmed request whose Symphony UUID, implementation
+issue UUID, PR native ID, base/head SHAs, governance revisions, source-closure
+revision, authoritative review-source requirements and revision,
+acceptance-evidence manifest/revision, complete required evidence
+manifest, applicable matching decision-resolutions, review input revision, and
+Review PR action identity match this invocation.
 
 rule symphony-review-consume-event-review-requested | when canonical-review-input-revision-is-durably-confirmed | consume event `review-requested` | next review-revision-eligible | choice none
 
@@ -120,6 +123,9 @@ Dispatch the selected reviewers in parallel with a self-contained envelope:
 ```text
 full Required review identity
 confirmed review-requested record and exact review input revision
+confirmed authoritative review-source requirements record/revision
+confirmed review-source-closure-v1 descriptor/revision
+complete typed acceptance-evidence manifest/revision
 Symphony outcome and constraints
 implementation issue contract and acceptance criteria
 approved DAG revision
@@ -135,9 +141,7 @@ No reviewer receives permission to edit or publish.
 
 ## Validate and aggregate
 
-Reject a result whose reviewed PR, head SHA, contract revision, DAG revision,
-review-policy revision, review input revision, or Review PR action identity
-differs from the request.
+Reject a result when Symphony UUID, implementation issue UUID, PR native ID, base SHA, head SHA, contract revision, DAG revision, review-policy revision, review input revision, or Review PR action identity differs from the request.
 
 Deduplicate identical underlying findings while preserving sources. Retain
 distinct concerns on the same line. Validate every requested outcome against
@@ -202,6 +206,7 @@ If it cannot approve, post one top-level PR comment recording the passed Symphon
 review and exact SHA.
 
 Every formal review or fallback comment embeds
+`Maestro-GitHub-Review-Publication-Identity: <complete publication identity>`,
 `Maestro-Review-Input-Revision: <review input revision>` and
 `Maestro-Review-Action-Identity: <review action identity>`. Search the full
 GitHub publication identity on the exact PR/head/input revision before
@@ -219,7 +224,7 @@ is the only implementation follow-up channel.
 After the canonical GitHub record is confirmed, add one Linear comment mentioning
 `@Cursor`, with the exact reviewed SHA, review/comment link, and concise numbered
 required outcomes. Embed
-`Maestro-Cursor-Follow-Up-Identity: <review action identity + linear-cursor-follow-up channel + review input revision>`,
+`Maestro-Cursor-Follow-Up-Identity: <complete linear publication identity>`,
 search before create and after an ambiguous response, and link exactly one
 confirmed canonical GitHub record. This Linear comment is the implementation
 follow-up channel.
@@ -233,8 +238,10 @@ rule symphony-review-apply-label-maestro-scope-change | when entity-scoped-pause
 
 rule symphony-review-apply-label-maestro-needs-human | when entity-scoped-pause-is-confirmed-and-strategic-authority-is-not-required | apply label `maestro:needs-human` | next entity-needs-human | choice entity-phase
 
-For `inconclusive`, publish only when the missing evidence itself requires action.
-Otherwise append `action-failed` and allow bounded retry.
+For `inconclusive`, publish only when every verdict-relevant missing item is a
+typed, stable acceptance-manifest entry with a deterministic locator and
+changeable state. Unkeyed, untyped, free-form, or source-closure-unknown missing
+evidence never publishes; append `action-failed` and allow bounded retry.
 
 Append one `review-recorded` event for a confirmed published `pass`,
 `changes-required`, `human-decision`, or actionable `inconclusive` result, with
@@ -283,9 +290,16 @@ Return to `symphony-reconcile`:
 ```markdown
 ## Symphony review result
 Outcome:
+Symphony UUID:
+Implementation issue UUID:
+PR native ID:
+Base SHA:
+Head SHA:
+Contract revision:
+DAG revision:
+Review-policy revision:
 Review action identity:
 Review input revision:
-Reviewed head:
 GitHub record:
 Linear @Cursor follow-up:
 Cleanup:

@@ -203,12 +203,16 @@ An ambiguous write is searched by native target/action identity before retry.
 ## 4. Review new PR heads
 
 For each relevant current PR head, derive the current review input revision from
-the complete required evidence manifest and applicable exact
-decision-resolutions. Select records by exact head plus review input revision.
+the complete review-source closure, typed acceptance-evidence manifest, required
+lens/validator evidence manifest, full context identity, and applicable exact
+decision-resolutions. Select records by exact full context plus review input revision.
 An older revision is historical and neither satisfies nor blocks the current
 revision.
 
-1. Assemble the complete Required review identity and canonical input array.
+A base SHA movement or Symphony/implementation/PR relink makes every old result non-authoritative and creates a new eligible identity even when head SHA is unchanged.
+
+1. Assemble the complete Required review identity, source closure, acceptance
+   manifest, and canonical input/action arrays.
 2. If the matching `review-requested` event is absent, append and confirm it
    before dispatching an expensive review or publishing either channel. Stop the
    pass after that durable boundary.
@@ -223,8 +227,11 @@ revision.
    review input revision and makes only the new revision eligible; a stale or
    mismatched resolution changes nothing.
 8. A confirmed published actionable `inconclusive` result appends
-   `review-recorded` and waits for changed evidence. An unpublished transient
-   `inconclusive` result appends `action-failed` and follows bounded retry.
+   `review-recorded` only when every missing item is keyed, typed, locatable, and
+   represented in the acceptance manifest. It waits for changed provider state.
+   An unkeyed/free-form or unpublished transient `inconclusive` result appends
+   `action-failed` and follows bounded retry without consuming publication
+   identity.
 9. If changes are required, let the internal skill create the canonical GitHub
    record and Linear `@Cursor` follow-up. If human judgment is required, pause
    only the affected subgraph.

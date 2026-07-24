@@ -109,6 +109,13 @@ Maestro-DAG-Node-Creation-Identity: <Symphony UUID + approved DAG revision + fix
 ## Implementation constraints
 ## Proposed approach
 ## Acceptance criteria
+- criterion_key: criterion-v1:<digest>
+  Criterion descriptor:
+  Required evidence:
+  - evidence_key: acceptance-evidence-key-v1:<digest>
+    Evidence descriptor:
+    Source kind:
+    Deterministic provider locator:
 ## Validation
 ## Out of scope
 ## Expected outputs
@@ -128,6 +135,35 @@ control issue or Symphony is complete.
 `Proposed approach` is guidance. Cursor may choose a materially better internal
 implementation, but cannot violate the objective, constraints, scope, acceptance
 criteria, or produced/consumed contracts without escalation.
+
+Every acceptance criterion and required evidence item is identity-bearing.
+Canonicalize each criterion as
+`["maestro-criterion-key-v1","<fixed DAG node key>","<normalized criterion descriptor>"]`
+and digest it as `criterion-v1:<lowercase SHA-256 hex>`. Canonicalize each
+required evidence item as
+`["maestro-acceptance-evidence-key-v1","<criterion key>","<finite source kind>",<canonical provider locator>,"<normalized evidence descriptor>"]`
+and digest it as `acceptance-evidence-key-v1:<lowercase SHA-256 hex>`. Keys are
+derived from the approved contract, never selected by a model. Changing a
+criterion descriptor changes the issue contract revision; changing an evidence descriptor, source kind, or locator also changes the issue contract revision.
+
+Acceptance-evidence source kinds are exactly `linear-issue`, `linear-comment`, `linear-document`, `github-pr`, `github-comment`, `github-review`, `github-check-run`, `github-artifact`, `repository-file`, `repository-commit`, and `manual-validation`.
+Every item has one deterministic provider locator, using these fixed arrays:
+
+- Linear issue: `["linear-issue","<workspace UUID>","<issue UUID>","<field or section key>"]`.
+- Linear comment: `["linear-comment","<issue UUID>","<contract-declared marker>"]`.
+- Linear document: `["linear-document","<document native ID>","<section key>"]`.
+- GitHub PR: `["github-pr","<owner/repository>","<PR native ID>","<field key>"]`.
+- GitHub comment or review: `["github-comment"|"github-review","<owner/repository>","<PR native ID>","<contract-declared marker>"]`.
+- GitHub check run: `["github-check-run","<owner/repository>","<head SHA>","<exact check name>"]`.
+- GitHub artifact: `["github-artifact","<owner/repository>","<head SHA>","<exact workflow and artifact name>"]`.
+- Repository file: `["repository-file","<owner/repository>","<commit SHA>","<exact repository-relative path>"]`.
+- Repository commit: `["repository-commit","<owner/repository>","<exact commit role or SHA>"]`.
+- Durable manual validation: `["manual-validation","<implementation issue UUID>","<contract-declared record marker>"]`.
+
+The locator exists before its provider record and is unchanged between
+`missing`, `unavailable`, and `present`. When present, provider-native record
+identity plus provider revision or exact content digest is separate from the
+locator. An untyped URL or free-form evidence reference is never revision authority.
 
 ## Cursor repository routing
 

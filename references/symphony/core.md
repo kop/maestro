@@ -101,12 +101,12 @@ Control contract revision: `symphony-control-v1`
 | Create candidate issue | Symphony UUID + approved DAG revision + fixed node key |
 | Create dependency edge | Symphony UUID + approved DAG revision + prerequisite node key + dependant node key + `blockedBy` |
 | Delegate issue | Linear issue UUID + contract revision + Cursor integration ID |
-| Review PR | GitHub PR native ID + head SHA + contract revision + DAG revision + review-policy revision + review input revision |
+| Review PR | Symphony UUID + implementation issue UUID + GitHub PR native ID + base SHA + head SHA + contract revision + DAG revision + review-policy revision + review input revision |
 | Reconcile merge | Linear issue UUID + merge SHA |
 | Update downstream issue | Downstream UUID + source merge SHA + target contract revision |
 | Create required follow-up issue | Symphony UUID + source implementation issue UUID + source merge SHA + fixed follow-up key |
-| Publish GitHub review record | Existing Review PR action identity + exact PR/head channel + review input revision |
-| Create Linear `@Cursor` follow-up | Existing Review PR action identity + `linear-cursor-follow-up` channel + review input revision |
+| Publish GitHub review record | Complete Review PR context + existing Review PR action identity + `github-review` channel |
+| Create Linear `@Cursor` follow-up | Complete Review PR context + existing Review PR action identity + `linear-cursor-follow-up` channel |
 | Complete Symphony | Symphony UUID + final approved DAG revision + final integration issue UUID + evidence revision |
 
 Canonical identity text uses Unicode NFC normalization, converts CRLF and CR to
@@ -121,62 +121,108 @@ item and sorted lexicographically by the UTF-8 bytes of each whitespace-free JSO
 item before serialization.
 
 The canonical review input revision uses those same RFC 8259, Unicode, ordering,
-SHA-256, and lowercase-hex rules. Build one complete required evidence manifest.
-Each required lens or validator contributes
-`["lens"|"validator","<stable key>","present"|"missing"|"unavailable","<evidence revision>"]`;
-use the explicit evidence revision sentinel `missing` or `unavailable` when that
-state applies. Never omit an expected item.
+SHA-256, and lowercase-hex rules.
 
-Lens stable keys are the fully qualified internal agent identifier from the
-finite roster in the review protocol; they are never display text. Validator stable keys use `review-validator-key-v1:<digest>` of the `maestro-review-validator-key-v1` tuple
-`["maestro-review-validator-key-v1","<protocol-declared validator kind>","<normalized command or inspection descriptor>"]`.
+### Review source closure
+
+The complete source descriptor is fixed as `review-source-closure-v1`. It has
+exactly `plugin_sources`, `policy_sources`, and `validators`. Internal Maestro
+agent/lens sources are explicit plugin-relative paths declared by the review
+policy. Repository instructions and every other policy input are explicit
+repository-relative `policy_sources`. Each validator declares one finite kind,
+its normalized exact command or inspection descriptor, an explicit ordered
+configuration-source path list (including an explicit empty list), the assertion
+that all implicit sources are declared, and capability state/name/version.
+The validator command, explicit configuration paths, and capability state are all revision inputs.
+
+The authoritative review-source requirements are a separate, durably confirmed
+`review-source-requirements-v1` record derived from the exact review policy and
+implementation issue contract, never from reviewer discovery or a
+self-assertion in the closure descriptor. It contains exact required plugin
+paths, exact required repository policy paths, and the finite validator key,
+command, configuration paths, and capability name for every required validator.
+It always contains `agents/symphony-reviewer.md`; selected risk lenses add their
+exact agent paths. The oracle rejects any missing or extra descriptor path,
+validator, configuration source, or capability name relative to this
+authoritative record. Its canonical revision is
+`review-source-requirements-v1:<lowercase SHA-256 hex>` and is itself included in
+the source closure.
+
 Validator kinds are exactly `issue-validation-command`,
 `kubernetes-helm-render`, `docker-build-runtime`, or
-`github-actions-workflow`; no other kind or display alias is valid.
-Source kinds are exactly `agent-contract`, `roster-selector`, `validator-command`, `validator-config`, and `validator-capability`.
-Their three fields are fixed: `agent-contract` uses the repository-relative
-agent path and provider-canonical blob SHA; `roster-selector` uses the exact
-protocol predicate and current review-policy revision; `validator-command` uses
-the normalized command/inspection descriptor and literal revision `command-v1`;
-`validator-config` uses the repository-relative configuration path and
-provider-canonical blob SHA; `validator-capability` uses the executable/tool
-name and freshly confirmed provider version. No model-authored alias or revision
-is valid.
-For a `present` item, build the ordered source set needed to reproduce that
-evidence. Lens sources include the agent contract path and provider-canonical
-blob revision plus every roster selector and its provider revision. Validator
-sources include the normalized validator command or inspection descriptor, every relevant configuration path and provider-canonical blob revision, and the executable capability name and confirmed version. An absent, partial, or
-ambiguous required source makes the item `missing` or `unavailable`, never
-`present`.
+`github-actions-workflow`. Lens stable keys are the fully qualified internal
+agent identifiers. Validator stable keys use the `maestro-review-validator-key-v1` tuple and are `review-validator-key-v1:<digest>` of
+`["maestro-review-validator-key-v1","<validator kind>","<normalized exact command or inspection descriptor>"]`.
 
-Serialize present evidence as
-`["maestro-review-evidence-v1","<lens|validator>","<stable key>","review-evidence-v1",[[<source kind>,<canonical source identity>,<provider-canonical revision>],...]]`;
-the fourth item is the fixed literal `review-evidence-v1`, never a selected or
-hand-authored revision. Serialize
-using the same ordered-set rules. Its evidence revision is
-`review-evidence-v1:<lowercase SHA-256 hex>`. Thus identical fresh-session inputs
-produce the same key and revision, while a changed validator command,
-configuration blob, capability version, agent contract, or roster-selection
-source changes the applicable stable key or evidence revision.
+Normalize every path to Unicode NFC and repository-relative forward-slash form.
+Remove only redundant `.` components; reject absolute paths, escaping `..` components, backslashes, glob syntax, empty paths, and symlink resolution outside
+the confirmed root. Paths are exact and never expanded or session-selected.
+Resolve plugin paths from the confirmed plugin root and repository/policy paths
+from the confirmed repository root. For each exact path, hash exact file bytes with SHA-256; do not require or consult Git metadata. Record
+`["<plugin-source|policy-source|validator-config>","<normalized path>","present","sha256:<digest>"]`
+or use the exact state/revision pairs `"missing","missing"` and
+`"unavailable","unavailable"`.
 
-Each applicable confirmed
-decision-resolution contributes
-`["<pause action identity>","<resolution action identity>","<governing revision>"]`.
-Only a resolution that exactly matches the governing pause and revision is
-applicable. Canonicalize both ordered sets as defined above, then serialize:
+Canonicalize and sort source entries and validators, then serialize
+`["review-source-closure-v1","<review-source requirements revision>",[<plugin sources>],[<policy sources>],[<validator descriptors>]]`.
+Its revision is `review-source-closure-v1:<lowercase SHA-256 hex>`. The executable
+oracle is `scripts/review-source-closure.py`; it requires both the authoritative
+requirements record and the observed descriptor. If a validator depends on implicit source closure that is not explicitly listed, append `action-failed`: publish nothing and use bounded recovery.
+The controller never guesses a path.
+
+### Acceptance-evidence manifest
+
+Read the exact key-bearing acceptance contract defined by the Linear protocol.
+For every required `evidence_key`, resolve its finite source kind and
+deterministic provider locator. Create exactly one entry, sorted by canonical
+evidence key:
 
 ```text
-["maestro-review-input-v1","<GitHub PR native ID>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>",[<required evidence manifest items>],[<applicable decision-resolution items>]]
+["maestro-acceptance-evidence-v1","<criterion key>","<evidence key>","<source kind>",<provider locator>,"present"|"missing"|"unavailable","<provider-native record identity or sentinel>","<provider revision/content digest or sentinel>"]
 ```
 
-Digest that array as `review-input-v1:<lowercase SHA-256 hex>`. A same-head
-evidence change or newly applicable matching decision-resolution therefore
-creates a new review input revision. Before expensive review or either
-publication, append and confirm `review-requested` containing the canonical
-array, digest, complete manifest, applicable resolutions, and provider evidence
-used to derive them. The Review PR action identity includes that exact review
-input revision; records from an older revision are historical and neither
-satisfy nor block the current revision.
+For `present`, both record identity and provider revision or exact content digest
+are required. For `missing` or `unavailable`, use that same state as both
+sentinels and retain the unchanged stable locator. Serialize
+`["maestro-acceptance-evidence-manifest-v1",[<entries sorted by evidence key>]]`
+and digest it as `acceptance-evidence-v1:<lowercase SHA-256 hex>`. Unknown,
+unkeyed, untyped-URL, or free-form missing evidence cannot enter this manifest.
+
+### Review evidence and full context identity
+
+Build one complete required lens/validator evidence manifest. Each required item
+is
+`["lens"|"validator","<stable key>","present"|"missing"|"unavailable","<evidence revision or matching sentinel>"]`;
+never omit an expected item. For each present item, serialize
+`["maestro-review-evidence-v1","<lens|validator>","<stable key>","review-evidence-v1","<review source closure revision>","<acceptance evidence manifest revision>",[<source-closure entries>],[<acceptance-evidence entries>]]`
+and digest it as `review-evidence-v1:<lowercase SHA-256 hex>`. Thus the acceptance evidence manifest is included in `review-evidence-v1`, and both the acceptance evidence manifest and its revision are included in `review-input-v1`.
+The fourth item is the fixed literal `review-evidence-v1`.
+
+Each applicable confirmed decision-resolution contributes
+`["<pause action identity>","<resolution action identity>","<governing revision>"]`.
+Only an exact pause/revision match is applicable. Canonicalize all ordered sets,
+then serialize the complete input on one fixed field order:
+
+```text
+["maestro-review-input-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review source closure revision>","<acceptance evidence manifest revision>",[<lens/validator evidence manifest>],[<acceptance-evidence manifest>],[<applicable decision-resolution items>]]
+```
+
+Digest it as `review-input-v1:<lowercase SHA-256 hex>`. Derive the Review PR
+action identity from
+`["maestro-review-action-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review input revision>"]`
+as `review-action-v1:<lowercase SHA-256 hex>`.
+Derive GitHub publication identity from
+`["maestro-review-github-publication-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review input revision>","<review action identity>","github-review"]`
+as `review-github-publication-v1:<lowercase SHA-256 hex>`.
+Derive Linear publication identity from
+`["maestro-review-linear-publication-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review input revision>","<review action identity>","linear-cursor-follow-up"]`
+as `review-linear-publication-v1:<lowercase SHA-256 hex>`.
+
+Before expensive review or either publication, append and confirm
+`review-requested` containing every canonical array/digest and the provider
+records used to derive them. Changed acceptance evidence, provider revision,
+base SHA, or any linked native identity creates a new eligible revision. Records
+from an older revision are historical and neither satisfy nor block it.
 
 Normalize a requested goal with those text rules and case-folding. Serialize the
 control creation tuple as a whitespace-free JSON array whose first item is
