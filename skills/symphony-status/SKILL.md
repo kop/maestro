@@ -62,9 +62,11 @@ rule symphony-status-consume-event-review-worktree-action-bound | when reservati
 
 rule symphony-status-consume-event-review-recorded | when canonical-exact-head-and-input-revision-review-record-is-confirmed | consume event `review-recorded` | next review-gate-recorded | choice none
 
-rule symphony-status-consume-event-review-stale-head | when remote-pr-head-changed-and-review-requested-is-absent | consume event `review-stale-head` | next review-new-head | choice none
+rule symphony-status-consume-event-review-stale-head | when remote-pr-head-or-context-preparation-changed-and-review-requested-is-absent | consume event `review-stale-head` | next review-new-head | choice none
 
-rule symphony-status-consume-event-review-input-stale | when full-input-changed-or-underivable-and-review-requested-is-confirmed | consume event `review-input-stale` | next new-review-input-eligible | choice none
+rule symphony-status-consume-event-review-input-stale-before-github | when derivable-full-input-changed-and-review-requested-is-confirmed-and-github-record-is-absent | consume event `review-input-stale` | next new-review-input-eligible | choice none
+
+rule symphony-status-consume-event-review-input-stale-after-github | when full-input-changed-or-underivable-and-confirmed-github-record-exists-and-linear-record-is-absent | consume event `review-input-stale` | next github-record-historical-input-recovery | choice none
 
 An already-published GitHub record referenced by `review-input-stale` is
 historical and cannot satisfy the current review/pass gate; report the new
@@ -72,7 +74,9 @@ eligible input or underivable-input recovery and the suppressed Linear follow-up
 
 rule symphony-status-consume-event-merge-observed | when github-merge-sha-is-freshly-confirmed | consume event `merge-observed` | next merge-reconciliation-pending | choice none
 
-rule symphony-status-consume-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | consume event `merge-reconciled` | next implementation-complete | choice none
+rule symphony-status-consume-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | consume event `merge-reconciled` | next merge-reconciled-confirmed | choice none
+
+rule symphony-status-consume-event-implementation-completed | when confirmed-merge-reconciled-is-consumed-by-separate-implementation-transition | consume event `implementation-completed` | next implementation-complete | choice none
 
 rule symphony-status-consume-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | consume event `human-decision-required` | next affected-subgraph-paused | choice none
 

@@ -60,6 +60,12 @@
           "provider_record_roles": ["linked-pr"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:github-pr", "selector:repository", "token:current_linked_pr", "role", "selector:field"],
           "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-pr", "selector:repository", "binding:current_linked_pr", "role", "selector:field"]
+        },
+        {
+          "stages": ["review", "both"],
+          "provider_record_roles": ["linked-pr-base"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:github-pr", "selector:repository", "token:current_linked_pr", "role", "selector:field", "token:current_base"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-pr", "selector:repository", "binding:current_linked_pr", "role", "selector:field", "binding:current_base"]
         }
       ]
     },

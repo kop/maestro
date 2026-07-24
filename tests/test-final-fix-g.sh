@@ -139,6 +139,60 @@ import sys
 
 requirement = json.loads(sys.argv[1])
 binding = json.loads(sys.argv[2])
+context = {
+    "symphony": "symphony-1",
+    "current_implementation_issue": "issue-unselected",
+    "repository": "owner/repo",
+    "current_linked_pr": "pr-unselected",
+    "current_base": "base-unselected",
+    "current_head": "head-unselected",
+    "current_merge": "merge-unselected",
+}
+for index, item in enumerate(requirement[6]):
+    if isinstance(item, str) and item.startswith("${") and item.endswith("}"):
+        context[item[2:-1]] = binding[5][index]
+locators = {
+    "symphony": ["authoritative-context-v1", "linear-issue", context["symphony"], "symphony-control"],
+    "current_implementation_issue": ["authoritative-context-v1", "linear-issue", context["current_implementation_issue"], "implementation-of", context["symphony"]],
+    "repository": ["authoritative-context-v1", "github-repository", context["repository"], "repository-for", context["current_implementation_issue"]],
+    "current_linked_pr": ["authoritative-context-v1", "github-pr", context["repository"], context["current_linked_pr"], "linked-to", context["current_implementation_issue"]],
+    "current_base": ["authoritative-context-v1", "github-pr", context["repository"], context["current_linked_pr"], "base", context["current_base"]],
+    "current_head": ["authoritative-context-v1", "github-pr", context["repository"], context["current_linked_pr"], "head", context["current_head"]],
+    "current_merge": ["authoritative-context-v1", "github-pr", context["repository"], context["current_linked_pr"], "merge", context["current_merge"]],
+}
+context = {
+    field: {
+        "value": value,
+        "provider_locator": locators[field],
+        "provider_state": "missing" if value == "unresolved" else "present",
+        "provider_record_id": "missing" if value == "unresolved" else f"context-record:{field}",
+        "provider_revision": "missing" if value == "unresolved" else f"context-revision:{field}",
+        "provider_evidence": "missing" if value == "unresolved" else f"context-evidence:{field}",
+    }
+    for field, value in context.items()
+}
+if binding[7] == "exact":
+    evidence = binding[10] if binding[8] == "present" else binding[8]
+    results = [{
+        "resolved_locator": binding[5],
+        "evidence_state": binding[8],
+        "provider_record_id": binding[9],
+        "provider_revision": binding[10],
+        "provider_evidence": evidence,
+    }]
+elif binding[7] == "ambiguous":
+    results = [
+        {
+            "resolved_locator": binding[5],
+            "evidence_state": "present",
+            "provider_record_id": f"ambiguous-record-{index}",
+            "provider_revision": f"ambiguous-revision-{index}",
+            "provider_evidence": f"evidence-v1:ambiguous-{index}",
+        }
+        for index in (1, 2)
+    ]
+else:
+    results = []
 json.dump(
     {
         "requirement": {
@@ -149,12 +203,9 @@ json.dump(
             "provider_record_role": requirement[5],
             "locator_template": requirement[6],
         },
-        "resolved_locator": binding[5],
-        "binding_context_revision": binding[6],
-        "resolution_outcome": binding[7],
-        "evidence_state": binding[8],
-        "provider_record_id": binding[9],
-        "provider_revision": binding[10],
+        "runtime_context": context,
+        "provider_query": {"resolved_locator": binding[5]},
+        "provider_results": results,
     },
     sys.stdout,
     separators=(",", ":"),
@@ -164,8 +215,18 @@ PY
     fail "$case_id was rejected by the plugin-owned evidence oracle"
   oracle_canonical=$(awk -F'\t' '$1 == "canonical" { print $2 }' <<< "$oracle_output")
   oracle_publishable=$(awk -F'\t' '$1 == "publishable" { print $2 }' <<< "$oracle_output")
-  [[ "$oracle_canonical" == "$canonical_binding" ]] ||
-    fail "$case_id fixture canonical binding differs from oracle"
+  python3 - "$case_id" "$canonical_binding" "$oracle_canonical" <<'PY'
+import json
+import sys
+
+case_id, fixture_raw, oracle_raw = sys.argv[1:]
+fixture = json.loads(fixture_raw)
+oracle = json.loads(oracle_raw)
+if len(oracle) != 12:
+    raise SystemExit(f"{case_id}: authoritative binding must have 12 fields")
+if oracle[:6] != fixture[:6] or oracle[7:11] != fixture[7:11]:
+    raise SystemExit(f"{case_id}: fixture semantics differ from authoritative oracle")
+PY
   [[ "$oracle_publishable" == "$publishable" ]] ||
     fail "$case_id fixture publishability differs from oracle"
 
@@ -274,6 +335,7 @@ assert_contains "$reconcile" 'review-input-stale.*new.*eligible'
 assert_file "$plugin_manifest"
 assert_contains "$plugin_manifest" 'review-source-requirements-v1.json'
 assert_contains "$plugin_manifest" 'scripts/review-source-closure.py'
+assert_contains "$plugin_manifest" 'scripts/review-preparation.py'
 assert_contains "$plugin_manifest" 'evidence-source-schema-v1.json'
 assert_contains "$plugin_manifest" 'scripts/evidence-source-schema.py'
 assert_contains "$plugin_manifest" 'skills/symphony-review/SKILL.md'
@@ -322,6 +384,7 @@ mandatory = set(manifest["mandatory_plugin_sources"])
 required = {
     "review-source-requirements-v1.json",
     "scripts/review-source-closure.py",
+    "scripts/review-preparation.py",
     "evidence-source-schema-v1.json",
     "scripts/evidence-source-schema.py",
     "skills/symphony-review/SKILL.md",

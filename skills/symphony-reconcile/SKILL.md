@@ -96,13 +96,17 @@ rule symphony-reconcile-consume-event-review-worktree-action-bound | when reserv
 
 rule symphony-reconcile-consume-event-review-recorded | when canonical-exact-head-and-input-revision-review-record-is-confirmed | consume event `review-recorded` | next review-gate-recorded | choice none
 
-rule symphony-reconcile-consume-event-review-stale-head | when remote-pr-head-changed-and-review-requested-is-absent | consume event `review-stale-head` | next review-new-head | choice none
+rule symphony-reconcile-consume-event-review-stale-head | when remote-pr-head-or-context-preparation-changed-and-review-requested-is-absent | consume event `review-stale-head` | next review-new-head | choice none
 
-rule symphony-reconcile-consume-event-review-input-stale | when full-input-changed-or-underivable-and-review-requested-is-confirmed | consume event `review-input-stale` | next new-review-input-eligible | choice none
+rule symphony-reconcile-consume-event-review-input-stale-before-github | when derivable-full-input-changed-and-review-requested-is-confirmed-and-github-record-is-absent | consume event `review-input-stale` | next new-review-input-eligible | choice none
+
+rule symphony-reconcile-consume-event-review-input-stale-after-github | when full-input-changed-or-underivable-and-confirmed-github-record-exists-and-linear-record-is-absent | consume event `review-input-stale` | next github-record-historical-input-recovery | choice none
 
 rule symphony-reconcile-consume-event-merge-observed | when github-merge-sha-is-freshly-confirmed | consume event `merge-observed` | next merge-reconciliation-pending | choice none
 
-rule symphony-reconcile-consume-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | consume event `merge-reconciled` | next implementation-complete | choice none
+rule symphony-reconcile-consume-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | consume event `merge-reconciled` | next merge-reconciled-confirmed | choice none
+
+rule symphony-reconcile-consume-event-implementation-completed | when confirmed-merge-reconciled-is-consumed-by-separate-implementation-transition | consume event `implementation-completed` | next implementation-complete | choice none
 
 rule symphony-reconcile-consume-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | consume event `human-decision-required` | next affected-subgraph-paused | choice none
 
@@ -147,19 +151,30 @@ For every merged PR lacking a confirmed `merge-reconciled` result for its source
 1. Re-read the final PR and merge SHA. Append `merge-observed` only if that event
    is absent, otherwise consume it. The existence of `merge-observed` never
    suppresses reconciliation and never counts as `merge-reconciled`.
-2. Obtain the final diff and relevant repository evidence.
+2. Obtain the final diff and resolve every `reconciliation`/`both` requirement
+   from authoritative runtime context. Build the canonical exact post-merge
+   binding manifest containing criterion/requirement key, evidence stage,
+   source kind/static role, binding-context revision, resolved locator,
+   resolution outcome, observable state, and provider
+   identity/revision/evidence. Any unresolved, ambiguous, missing, unavailable,
+   omitted, stale, or mismatched required entry blocks dispatch acceptance and
+   makes `complete` impossible.
 3. Dispatch `maestro:implementation-reconciler` with the complete reconciliation
-   envelope.
-4. Validate the reconciler identity against the requested PR, issue UUID, merge
-   SHA, contract revision, and DAG revision. Validate its declared verdict and
-   acceptance-evidence table.
+   envelope and canonical binding manifest/revision.
+4. Always recompute the binding manifest before accepting the reconciler result.
+   Immediately before acceptance, derive it from
+   fresh native state. Require byte equality with the request, exact reconciler identity and request
+   identity, every entry/key echoed, and every acceptance/deviation/follow-up
+   conclusion mapped to those exact bindings in the complete acceptance-evidence table.
 5. Only verdict `complete`, with every acceptance criterion satisfied and
-   evidenced, may append `Actual implementation`, `Deviations and decisions`, and
-   `Follow-up work`; apply bounded downstream edits; create and confirm required
-   follow-ups with `follow-up-created`; record `merge-reconciled`; move the issue
-   to an unambiguous native completed status; apply `maestro:complete` to that
-   implementation issue; or unlock dependants. This implementation transition
-   never implies completion of the control issue or Symphony.
+   evidenced, may persist the merge reconciliation and append exactly one
+   `merge-reconciled`. In a separate transition after that confirmation, append
+   `Actual implementation`, `Deviations and decisions`, and `Follow-up work`;
+   apply bounded downstream edits; create and confirm required follow-ups with
+   `follow-up-created`; move the issue to an unambiguous native completed status;
+   apply `maestro:complete` to that implementation issue; or unlock dependants.
+   A third, later closeout transition evaluates the whole Symphony. No merge
+   transition completes the control issue or Symphony.
 6. For `human-decision`, journal `merge-observed` and
    `human-decision-required` with decision evidence and prior/resume phase. Apply
    `maestro:scope-change` for strategic contract/DAG revision or
@@ -172,7 +187,9 @@ For every merged PR lacking a confirmed `merge-reconciled` result for its source
 
 rule symphony-reconcile-append-event-merge-observed | when github-merge-sha-is-freshly-confirmed | append event `merge-observed` | next merge-reconciliation-pending | choice none
 
-rule symphony-reconcile-append-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | append event `merge-reconciled` | next implementation-complete | choice none
+rule symphony-reconcile-append-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | append event `merge-reconciled` | next merge-reconciled-confirmed | choice none
+
+rule symphony-reconcile-append-event-implementation-completed | when confirmed-merge-reconciled-is-consumed-by-separate-implementation-transition | append event `implementation-completed` | next implementation-complete | choice none
 
 rule symphony-reconcile-append-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | append event `human-decision-required` | next affected-subgraph-paused | choice none
 
@@ -198,7 +215,7 @@ rule symphony-reconcile-append-event-action-failed | when material-action-attemp
 
 Consume the reconciler result according to its exact returned value:
 
-rule symphony-reconcile-consume-reconciliation-verdict-complete | when aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-present-and-complete-is-evidenced | consume reconciliation verdict `complete` | next implementation-complete | choice reconciliation-verdict
+rule symphony-reconcile-consume-reconciliation-verdict-complete | when aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-present-and-complete-is-evidenced | consume reconciliation verdict `complete` | next merge-reconciliation-eligible | choice reconciliation-verdict
 
 rule symphony-reconcile-consume-reconciliation-verdict-human-decision | when aggregate-reconciliation-decision-is-required | consume reconciliation verdict `human-decision` | next reconciliation-human-decision | choice reconciliation-verdict
 
@@ -224,8 +241,15 @@ A base SHA movement or Symphony/implementation/PR relink makes every old result 
    resolve only `reconciliation` and `both`, require every binding to be exact,
    and keep post-merge evidence gating `merge-reconciled`, implementation
    completion, and closeout. Zero or multiple matches fail closed.
-2. Derive and confirm the stable review worktree reservation from
-   Symphony/implementation/repository/PR/base/head/contract/DAG/policy inputs.
+2. Before needing repository worktree bytes, derive canonical
+   `review-preparation-v1` from Symphony/implementation/repository/PR/base/head/
+   contract/DAG/policy context, plan-time evidence requirements and preworktree
+   provider bindings, capabilities, applicable decision resolutions,
+   plugin-owned source/policy closure, and exact-head repository source
+   requirements. Derive and confirm the stable review worktree reservation from
+   that preparation revision and the full identity. Same-head evidence,
+   capability, decision, plugin-policy, base, or relink changes create a new
+   preparation/reservation; unchanged retries reuse the current one.
    Write only that reservation to the initial cleanup ledger and marker, then
    create the owned exact-head worktree before source closure or
    `review-requested`. Verify marker/containment, expected GitHub repository,
@@ -245,6 +269,9 @@ A base SHA movement or Symphony/implementation/PR relink makes every old result 
    the journal/marker pair. If the matching `review-requested` event is absent,
    append and confirm it before dispatching an expensive review or publishing
    either channel. Keep the same worktree and ledger throughout.
+   One reservation maps to exactly one review action. A differing exact-head
+   repository closure, conflicting second action, or historical reservation is
+   stale and fails closed.
 5. If no result exists, dispatch internal `maestro:symphony-review` with the same
    ledger/worktree. Ownership transfer occurs only after confirmed dispatch as
    an atomic durable cleanup-ledger owner update; cleanup remains
@@ -283,7 +310,7 @@ rule symphony-reconcile-append-event-review-worktree-reserved | when canonical-p
 
 rule symphony-reconcile-append-event-review-worktree-action-bound | when reservation-to-final-review-action-binding-is-confirmed | append event `review-worktree-action-bound` | next action-binding-confirmed | choice none
 
-rule symphony-reconcile-append-event-review-stale-head | when remote-pr-head-changed-and-review-requested-is-absent | append event `review-stale-head` | next review-new-head | choice none
+rule symphony-reconcile-append-event-review-stale-head | when remote-pr-head-or-context-preparation-changed-and-review-requested-is-absent | append event `review-stale-head` | next review-new-head | choice none
 
 Consume the review result according to its exact returned value:
 
@@ -542,8 +569,14 @@ rule symphony-reconcile-emit-failure-category-review-stale-head | when review-st
 rule symphony-reconcile-consume-failure-category-review-stale-head | when review-stale-head-before-request-category-is-evidenced | consume failure category `review-stale-head` | next review-stale-head-recovery | choice none
 Retryability: Do not retry the stale identity; create a new identity for the new head
 
-rule symphony-reconcile-consume-failure-category-review-input-stale | when review-input-stale-after-request-category-is-evidenced | consume failure category `review-input-stale` | next new-review-input-eligible | choice none
-Retryability: Do not retry or publish the stale result; reconcile the newly derived input
+rule symphony-reconcile-consume-failure-category-review-input-stale-derivable | when derivable-review-input-stale-after-request-category-is-evidenced | consume failure category `review-input-stale` | next new-review-input-eligible | choice none
+Retryability: Do not retry or publish the stale result; a derivable input becomes eligible, while an underivable post-GitHub input keeps that record historical and enters recovery
+
+rule symphony-reconcile-consume-failure-category-review-input-stale-underivable-after-github | when underivable-review-input-stale-after-github-category-is-evidenced | consume failure category `review-input-stale` | next github-record-historical-input-recovery | choice none
+Retryability: Do not retry or publish the stale result; a derivable input becomes eligible, while an underivable post-GitHub input keeps that record historical and enters recovery
+
+rule symphony-reconcile-consume-failure-category-review-input-underivable | when review-input-underivable-before-github-category-is-evidenced | consume failure category `review-input-underivable` | next review-input-derivation-recovery | choice none
+Retryability: Before GitHub, claim no new eligible revision; clean up and use bounded input-derivation recovery
 
 rule symphony-reconcile-consume-failure-category-validation-timeout | when validation-timeout-category-is-evidenced | consume failure category `validation-timeout` | next validation-timeout-recovery | choice none
 Retryability: Terminate, clean up, and retry only within the unchanged-state budget

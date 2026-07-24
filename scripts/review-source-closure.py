@@ -29,6 +29,7 @@ PLUGIN_REQUIREMENTS_PATH = "review-source-requirements-v1.json"
 MANDATORY_PLUGIN_SOURCES = {
     PLUGIN_REQUIREMENTS_PATH,
     "scripts/review-source-closure.py",
+    "scripts/review-preparation.py",
     "evidence-source-schema-v1.json",
     "scripts/evidence-source-schema.py",
     "skills/symphony-review/SKILL.md",

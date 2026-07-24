@@ -1,0 +1,10 @@
+case_id	change	expected_same_reservation
+initial	none	true
+fresh_session	none	true
+same_head_evidence	evidence	false
+same_head_capability	capability	false
+same_head_decision	decision	false
+same_head_plugin_policy	plugin	false
+base_changed	base	false
+implementation_relinked	relink	false
+repository_requirements_changed	repository-requirements	false

@@ -78,27 +78,93 @@ if "$helper" --plugin-root . requirement --input "$role_changed" \
 fi
 
 exact_binding="$tmp_dir/exact-binding.json"
-exact_unavailable_binding="$tmp_dir/exact-unavailable-binding.json"
 ambiguous_binding="$tmp_dir/ambiguous-binding.json"
 unresolved_binding="$tmp_dir/unresolved-binding.json"
-printf '%s\n' \
-  '{"requirement":{"criterion_key":"criterion-v1:criterion","required_outcome":"compatibility evidence","evidence_stage":"review","source_kind":"github-check-run","provider_record_role":"integration-check","locator_template":["locator-template-v1","github-check-run","owner/repo","${current_head}","integration-check","integration"]},"resolved_locator":["resolved-locator-v1","github-check-run","owner/repo","head-1","integration-check","integration"],"binding_context_revision":"evidence-binding-context-v1:ctx","resolution_outcome":"exact","evidence_state":"present","provider_record_id":"check-1","provider_revision":"attempt-1"}' \
-  > "$exact_binding"
-printf '%s\n' \
-  '{"requirement":{"criterion_key":"criterion-v1:criterion","required_outcome":"compatibility evidence","evidence_stage":"review","source_kind":"github-check-run","provider_record_role":"integration-check","locator_template":["locator-template-v1","github-check-run","owner/repo","${current_head}","integration-check","integration"]},"resolved_locator":["resolved-locator-v1","github-check-run","owner/repo","head-1","integration-check","integration"],"binding_context_revision":"evidence-binding-context-v1:ctx","resolution_outcome":"exact","evidence_state":"unavailable","provider_record_id":"unavailable","provider_revision":"unavailable"}' \
-  > "$exact_unavailable_binding"
-printf '%s\n' \
-  '{"requirement":{"criterion_key":"criterion-v1:criterion","required_outcome":"compatibility evidence","evidence_stage":"review","source_kind":"github-check-run","provider_record_role":"integration-check","locator_template":["locator-template-v1","github-check-run","owner/repo","${current_head}","integration-check","integration"]},"resolved_locator":["resolved-locator-v1","github-check-run","owner/repo","head-1","integration-check","integration"],"binding_context_revision":"evidence-binding-context-v1:ctx","resolution_outcome":"ambiguous","evidence_state":"unavailable","provider_record_id":"unavailable","provider_revision":"unavailable"}' \
-  > "$ambiguous_binding"
-printf '%s\n' \
-  '{"requirement":{"criterion_key":"criterion-v1:criterion","required_outcome":"compatibility evidence","evidence_stage":"review","source_kind":"github-check-run","provider_record_role":"integration-check","locator_template":["locator-template-v1","github-check-run","owner/repo","${current_head}","integration-check","integration"]},"resolved_locator":["resolved-locator-v1","github-check-run","owner/repo","unresolved","integration-check","integration"],"binding_context_revision":"evidence-binding-context-v1:ctx","resolution_outcome":"unresolved","evidence_state":"missing","provider_record_id":"missing","provider_revision":"missing"}' \
-  > "$unresolved_binding"
+python3 - "$exact_binding" "$ambiguous_binding" "$unresolved_binding" <<'PY'
+import copy
+import json
+import sys
+
+values = {
+    "symphony": "symphony-1",
+    "current_implementation_issue": "issue-1",
+    "repository": "owner/repo",
+    "current_linked_pr": "pr-1",
+    "current_base": "base-1",
+    "current_head": "head-1",
+    "current_merge": "merge-1",
+}
+
+def context(values):
+    locators = {
+        "symphony": ["authoritative-context-v1", "linear-issue", values["symphony"], "symphony-control"],
+        "current_implementation_issue": ["authoritative-context-v1", "linear-issue", values["current_implementation_issue"], "implementation-of", values["symphony"]],
+        "repository": ["authoritative-context-v1", "github-repository", values["repository"], "repository-for", values["current_implementation_issue"]],
+        "current_linked_pr": ["authoritative-context-v1", "github-pr", values["repository"], values["current_linked_pr"], "linked-to", values["current_implementation_issue"]],
+        "current_base": ["authoritative-context-v1", "github-pr", values["repository"], values["current_linked_pr"], "base", values["current_base"]],
+        "current_head": ["authoritative-context-v1", "github-pr", values["repository"], values["current_linked_pr"], "head", values["current_head"]],
+        "current_merge": ["authoritative-context-v1", "github-pr", values["repository"], values["current_linked_pr"], "merge", values["current_merge"]],
+    }
+    return {
+        field: {
+            "value": value,
+            "provider_locator": locators[field],
+            "provider_state": "missing" if value == "unresolved" else "present",
+            "provider_record_id": "missing" if value == "unresolved" else f"context-record:{field}",
+            "provider_revision": "missing" if value == "unresolved" else f"context-revision:{field}",
+            "provider_evidence": "missing" if value == "unresolved" else f"context-evidence:{field}",
+        }
+        for field, value in values.items()
+    }
+
+requirement = {
+    "criterion_key": "criterion-v1:criterion",
+    "required_outcome": "compatibility evidence",
+    "evidence_stage": "review",
+    "source_kind": "github-check-run",
+    "provider_record_role": "integration-check",
+    "locator_template": ["locator-template-v1", "github-check-run", "owner/repo", "${current_head}", "integration-check", "integration"],
+}
+resolved = ["resolved-locator-v1", "github-check-run", "owner/repo", "head-1", "integration-check", "integration"]
+result = {
+    "resolved_locator": resolved,
+    "evidence_state": "present",
+    "provider_record_id": "check-1",
+    "provider_revision": "attempt-1",
+    "provider_evidence": "evidence-v1:proof-1",
+}
+exact = {
+    "requirement": requirement,
+    "runtime_context": context(values),
+    "provider_query": {"resolved_locator": resolved},
+    "provider_results": [result],
+}
+ambiguous = copy.deepcopy(exact)
+ambiguous["provider_results"].append({
+    **result,
+    "provider_record_id": "check-2",
+    "provider_revision": "attempt-2",
+    "provider_evidence": "evidence-v1:proof-2",
+})
+unresolved_values = copy.deepcopy(values)
+unresolved_values["current_head"] = "unresolved"
+unresolved_locator = copy.deepcopy(resolved)
+unresolved_locator[3] = "unresolved"
+unresolved = {
+    "requirement": requirement,
+    "runtime_context": context(unresolved_values),
+    "provider_query": {"resolved_locator": unresolved_locator},
+    "provider_results": [],
+}
+for path, value in zip(sys.argv[1:], (exact, ambiguous, unresolved)):
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(value, handle, separators=(",", ":"))
+PY
 
 exact_output=$("$helper" --plugin-root . binding --input "$exact_binding")
-exact_unavailable_output=$("$helper" --plugin-root . binding --input "$exact_unavailable_binding")
 ambiguous_output=$("$helper" --plugin-root . binding --input "$ambiguous_binding")
 unresolved_output=$("$helper" --plugin-root . binding --input "$unresolved_binding")
-exact_revision=$(awk -F'\t' '$1 == "revision" { print $2 }' <<< "$exact_unavailable_output")
+exact_revision=$(awk -F'\t' '$1 == "revision" { print $2 }' <<< "$exact_output")
 ambiguous_revision=$(awk -F'\t' '$1 == "revision" { print $2 }' <<< "$ambiguous_output")
 [[ "$exact_revision" != "$ambiguous_revision" ]] ||
   fail "resolution outcome does not change canonical binding digest"
@@ -108,20 +174,6 @@ ambiguous_revision=$(awk -F'\t' '$1 == "revision" { print $2 }' <<< "$ambiguous_
   fail "ambiguous binding is publishable"
 [[ "$(awk -F'\t' '$1 == "publishable" { print $2 }' <<< "$unresolved_output")" == false ]] ||
   fail "unresolved binding is publishable"
-
-invalid_ambiguous="$tmp_dir/invalid-ambiguous-present.json"
-invalid_unresolved="$tmp_dir/invalid-unresolved-unavailable.json"
-sed \
-  's/"resolution_outcome":"exact"/"resolution_outcome":"ambiguous"/' \
-  "$exact_binding" > "$invalid_ambiguous"
-sed \
-  's/"evidence_state":"missing","provider_record_id":"missing","provider_revision":"missing"/"evidence_state":"unavailable","provider_record_id":"unavailable","provider_revision":"unavailable"/' \
-  "$unresolved_binding" > "$invalid_unresolved"
-for invalid in "$invalid_ambiguous" "$invalid_unresolved"; do
-  if "$helper" --plugin-root . binding --input "$invalid" >/dev/null 2>&1; then
-    fail "$(basename "$invalid") invalid resolution/state pair was accepted"
-  fi
-done
 
 python3 - "$schema" "$exact_output" <<'PY'
 import json
@@ -151,7 +203,7 @@ canonical = next(
     if line.startswith("canonical\t")
 )
 binding = json.loads(canonical)
-if len(binding) != 11 or binding[7] != "exact" or binding[8] != "present":
+if len(binding) != 12 or binding[7] != "exact" or binding[8] != "present":
     raise SystemExit("canonical binding does not separate resolution and evidence state")
 PY
 

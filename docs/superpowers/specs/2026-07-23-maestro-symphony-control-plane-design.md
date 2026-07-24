@@ -711,13 +711,21 @@ work.
 For each newly merged PR:
 
 1. inspect the final diff and merge SHA;
-2. run `implementation-reconciler`;
-3. append Actual Implementation and deviations;
-4. apply bounded downstream updates;
-5. escalate material contract or DAG changes;
-6. record reconciliation;
-7. mark the issue complete; and
-8. recalculate readiness.
+2. resolve every `reconciliation` and `both` requirement from authoritative
+   runtime context into one canonical exact binding manifest;
+3. run `implementation-reconciler` with that manifest and require every
+   acceptance, deviation, and follow-up conclusion to reference its exact
+   bindings;
+4. recompute and byte-compare the reconciliation manifest before accepting the
+   result;
+5. record `merge-reconciled` only for a same-identity `complete` result whose
+   required bindings and acceptance evidence are all exact and satisfied;
+6. in a separate transition consume confirmed `merge-reconciled`, append Actual
+   Implementation and deviations, apply bounded downstream updates, mark only
+   the implementation issue complete, and recalculate readiness; and
+7. evaluate Symphony closeout later against every closeout gate, emitting
+   `symphony-completed` exactly once. A merge transition never closes the
+   Symphony.
 
 GitHub's merged state wins even when Linear automation has not caught up.
 
@@ -811,17 +819,34 @@ No subagent sleeps or polls. `/loop` owns repetition.
 
 For an unreviewed PR head:
 
-1. Locate or fetch the repository.
-2. Create a unique review directory under a dedicated Maestro temporary root.
-3. Write an ownership marker beside the worktree containing the Symphony native
-   ID, repository, PR native ID, head SHA, and review action identity.
-4. Add a detached worktree inside that directory at the exact head SHA.
-5. Read repository instructions from that revision.
-6. Run risk-adaptive review and validation with the worktree as the exact working
+1. Reconstruct authoritative runtime context and mechanically derive every
+   plan-time evidence binding. Caller locators and context revisions are
+   assertions only.
+2. Before repository bytes are needed, derive `review-preparation-v1` from the
+   full Symphony/implementation/repository/PR/base/head/governance context,
+   plan-time requirements and preworktree bindings, capabilities, decision
+   resolutions, plugin source/policy closure, and exact-head repository source
+   requirements.
+3. Derive one reservation from that preparation revision. Write a
+   reservation-only cleanup ledger and initial ownership marker; the initial
+   marker contains no final action identity.
+4. Locate or fetch the repository and create a unique review directory under a
+   dedicated Maestro temporary root.
+5. Add and verify a detached worktree at the exact head SHA, then derive the
+   repository source closure. A differing closure makes the preparation stale.
+6. Derive the final input/action, durably bind exactly one action to the
+   reservation, and only then update the marker to the confirmed binding. A
+   second action or historical reservation fails closed.
+7. Run risk-adaptive review and validation with the worktree as the exact working
    directory.
-7. Confirm that findings apply to the original head SHA.
-8. Submit one GitHub PR review or top-level PR comment.
-9. Remove the expected worktree through Git and delete its owned review directory
+8. At the first publication gate, after `review-requested` and before GitHub,
+   rederive the complete input. A derivable change emits `review-input-stale`;
+   an underivable input emits `action-failed`/`review-input-underivable` and
+   claims no new eligible revision.
+9. Submit or recover one GitHub PR review or top-level PR comment, then apply the
+   second publication gate before Linear. Changed or underivable input makes the
+   GitHub record historical, emits `review-input-stale`, and suppresses Linear.
+10. Remove the expected worktree through Git and delete its owned review directory
    and transient artifacts.
 
 Review-directory names are derived from sanitized native identifiers, never raw
@@ -829,11 +854,12 @@ issue or PR titles. Before creating, executing in, or removing a worktree, Maest
 resolves the relevant paths and verifies directory-component containment beneath
 the dedicated review root. It does not rely on a string-prefix check.
 
-Cleanup requires both:
-
-- a matching ownership marker; and
-- confirmation from Git worktree metadata that the path belongs to the expected
-  repository.
+Before final action binding, cleanup requires the exact confirmed reservation
+plus matching ledger, reservation-only marker, containment, attachment, and
+repository state. After binding, cleanup requires both that reservation and the
+exact bound action identity, plus the same guarded observations. Attached
+worktrees require matching Git metadata; reserved-unattached paths require proof
+that no checkout, metadata, or unexpected contents exist.
 
 Maestro never removes an unmarked, mismatched, or user-created worktree. At the
 start of a later reconciliation pass it may scan the dedicated root and remove

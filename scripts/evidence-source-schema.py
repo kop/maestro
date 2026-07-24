@@ -9,7 +9,7 @@ import json
 import re
 import sys
 import unicodedata
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -24,6 +24,25 @@ BINDING_TOKENS = {
 }
 RESOLUTION_OUTCOMES = {"exact", "unresolved", "ambiguous"}
 OBSERVABLE_STATES = {"present", "missing", "unavailable"}
+RUNTIME_CONTEXT_FIELDS = {
+    "symphony",
+    "current_implementation_issue",
+    "repository",
+    "current_linked_pr",
+    "current_base",
+    "current_head",
+    "current_merge",
+}
+RUNTIME_CONTEXT_ORDER = (
+    "symphony",
+    "repository",
+    "current_implementation_issue",
+    "current_linked_pr",
+    "current_base",
+    "current_head",
+    "current_merge",
+)
+GLOB_CHARACTERS = {"*", "?", "["}
 SOURCE_KINDS = {
     "linear-issue",
     "linear-comment",
@@ -197,56 +216,90 @@ def validate_shape_pair(template: Any, provider: Any, field: str) -> None:
 
 
 def validate_selector(value: Any, name: str, field: str) -> str:
+    if name == "repository_path":
+        if not isinstance(value, str):
+            raise SchemaError(f"{field} must be a string")
+        normalized = unicodedata.normalize("NFC", value.strip())
+        if (
+            not normalized
+            or normalized.startswith("/")
+            or "\\" in normalized
+            or any(character in normalized for character in GLOB_CHARACTERS)
+        ):
+            raise SchemaError(f"{field} must be a safe repository-relative path")
+        path = PurePosixPath(normalized)
+        if ".." in path.parts:
+            raise SchemaError(f"{field} must be a safe repository-relative path")
+        normalized = path.as_posix()
+        while normalized.startswith("./"):
+            normalized = normalized[2:]
+        if normalized in {"", "."}:
+            raise SchemaError(f"{field} must name one repository-relative path")
+        return normalized
     normalized = text(value, field)
     if "${" in normalized:
         raise SchemaError(f"{field} must be a static selector")
     if name == "repository" and not re.fullmatch(r"[^/\s]+/[^/\s]+", normalized):
         raise SchemaError(f"{field} must be owner/repository")
-    if name == "repository_path":
-        if (
-            normalized.startswith("/")
-            or "\\" in normalized
-            or ".." in Path(normalized).parts
-        ):
-            raise SchemaError(f"{field} must be a safe repository-relative path")
     return normalized
 
 
-def shape_matches(
+def canonical_locator(
     values: Any,
     shape: list[str],
     role: str,
     field: str,
-    template_values: list[Any] | None = None,
-) -> bool:
+) -> list[Any]:
     if not isinstance(values, list) or len(values) != len(shape):
-        return False
-    try:
-        for index, (value, slot) in enumerate(zip(values, shape)):
-            kind, name = split_slot(slot, f"{field}.shape[{index}]")
-            item_field = f"{field}[{index}]"
-            if kind == "literal":
-                if value != name:
-                    return False
-            elif kind == "token":
-                if value != "${" + str(name) + "}":
-                    return False
-            elif kind == "binding":
-                text(value, item_field)
-                if "${" in value:
-                    return False
-            elif kind == "role":
-                if value != role:
-                    return False
-            elif kind == "selector":
-                selector = validate_selector(value, str(name), item_field)
-                if template_values is not None and selector != template_values[index]:
-                    return False
-            else:
-                return False
-    except SchemaError:
-        return False
-    return True
+        raise SchemaError(f"{field} does not match its finite shape")
+    canonical = []
+    for index, (value, slot) in enumerate(zip(values, shape)):
+        kind, name = split_slot(slot, f"{field}.shape[{index}]")
+        item_field = f"{field}[{index}]"
+        if kind == "literal":
+            if value != name:
+                raise SchemaError(f"{item_field} literal differs")
+            canonical.append(name)
+        elif kind == "token":
+            token = "${" + str(name) + "}"
+            if value != token:
+                raise SchemaError(f"{item_field} token differs")
+            canonical.append(token)
+        elif kind == "role":
+            if value != role:
+                raise SchemaError(f"{item_field} role differs")
+            canonical.append(role)
+        elif kind == "selector":
+            canonical.append(validate_selector(value, str(name), item_field))
+        else:
+            raise SchemaError(f"{item_field} is not a plan-time locator slot")
+    return canonical
+
+
+def requirement_variant(
+    schema: dict[str, Any],
+    stage: str,
+    source_kind: str,
+    role: str,
+    locator: Any,
+) -> tuple[dict[str, Any], list[Any]]:
+    matches = []
+    for variant in schema["source_kinds"][source_kind]["variants"]:
+        if stage not in variant["stages"] or role not in variant["provider_record_roles"]:
+            continue
+        try:
+            canonical = canonical_locator(
+                locator,
+                variant["locator_template_shape"],
+                role,
+                "locator_template",
+            )
+        except SchemaError:
+            continue
+        matches.append((variant, canonical))
+    if len(matches) != 1:
+        raise SchemaError("requirement does not match exactly one source-kind variant")
+    return matches[0]
 
 
 def canonical_requirement(
@@ -273,21 +326,13 @@ def canonical_requirement(
     if source_kind not in SOURCE_KINDS:
         raise SchemaError("source_kind is not finite")
     role = text(requirement["provider_record_role"], "provider_record_role")
-    matches = []
-    for variant in schema["source_kinds"][source_kind]["variants"]:
-        if (
-            stage in variant["stages"]
-            and role in variant["provider_record_roles"]
-            and shape_matches(
-                requirement["locator_template"],
-                variant["locator_template_shape"],
-                role,
-                "locator_template",
-            )
-        ):
-            matches.append(variant)
-    if len(matches) != 1:
-        raise SchemaError("requirement does not match exactly one source-kind variant")
+    variant, locator = requirement_variant(
+        schema,
+        stage,
+        source_kind,
+        role,
+        requirement["locator_template"],
+    )
     canonical = [
         "maestro-evidence-requirement-key-v1",
         criterion_key,
@@ -295,74 +340,313 @@ def canonical_requirement(
         stage,
         source_kind,
         role,
-        requirement["locator_template"],
+        locator,
     ]
-    return canonical, digest("evidence-requirement-key-v1", canonical), matches[0]
+    return canonical, digest("evidence-requirement-key-v1", canonical), variant
 
 
-def canonical_binding(schema: dict[str, Any], value: Any) -> tuple[list[Any], bool]:
-    binding = exact_keys(
+def authoritative_context_locator(
+    field: str,
+    values: dict[str, str],
+) -> list[str]:
+    if field == "symphony":
+        return [
+            "authoritative-context-v1",
+            "linear-issue",
+            values[field],
+            "symphony-control",
+        ]
+    if field == "current_implementation_issue":
+        return [
+            "authoritative-context-v1",
+            "linear-issue",
+            values[field],
+            "implementation-of",
+            values["symphony"],
+        ]
+    if field == "repository":
+        return [
+            "authoritative-context-v1",
+            "github-repository",
+            values[field],
+            "repository-for",
+            values["current_implementation_issue"],
+        ]
+    if field == "current_linked_pr":
+        return [
+            "authoritative-context-v1",
+            "github-pr",
+            values["repository"],
+            values[field],
+            "linked-to",
+            values["current_implementation_issue"],
+        ]
+    role = {
+        "current_base": "base",
+        "current_head": "head",
+        "current_merge": "merge",
+    }[field]
+    return [
+        "authoritative-context-v1",
+        "github-pr",
+        values["repository"],
+        values["current_linked_pr"],
+        role,
+        values[field],
+    ]
+
+
+def canonical_runtime_context(value: Any) -> dict[str, list[Any]]:
+    context = exact_keys(value, RUNTIME_CONTEXT_FIELDS, "runtime_context")
+    values = {}
+    for field in RUNTIME_CONTEXT_ORDER:
+        confirmation = exact_keys(
+            context[field],
+            {
+                "value",
+                "provider_locator",
+                "provider_state",
+                "provider_record_id",
+                "provider_revision",
+                "provider_evidence",
+            },
+            f"runtime_context.{field}",
+        )
+        if field == "repository":
+            values[field] = validate_selector(
+                confirmation["value"],
+                "repository",
+                f"runtime_context.{field}.value",
+            )
+        else:
+            values[field] = text(
+                confirmation["value"],
+                f"runtime_context.{field}.value",
+            )
+    canonical = {}
+    for field in RUNTIME_CONTEXT_ORDER:
+        confirmation = context[field]
+        locator = authoritative_context_locator(field, values)
+        if confirmation["provider_locator"] != locator:
+            raise SchemaError(
+                f"runtime_context.{field} provider locator differs from governing context"
+            )
+        record_id = text(
+            confirmation["provider_record_id"],
+            f"runtime_context.{field}.provider_record_id",
+        )
+        revision = text(
+            confirmation["provider_revision"],
+            f"runtime_context.{field}.provider_revision",
+        )
+        evidence = text(
+            confirmation["provider_evidence"],
+            f"runtime_context.{field}.provider_evidence",
+        )
+        state = text(
+            confirmation["provider_state"],
+            f"runtime_context.{field}.provider_state",
+        )
+        if state not in OBSERVABLE_STATES:
+            raise SchemaError(f"runtime_context.{field} state is not finite")
+        if state == "present":
+            if values[field] == "unresolved" or any(
+                item in OBSERVABLE_STATES | {"unresolved"}
+                for item in (record_id, revision, evidence)
+            ):
+                raise SchemaError(
+                    f"runtime_context.{field} lacks provider confirmation"
+                )
+        elif (record_id, revision, evidence) != (state, state, state):
+            raise SchemaError(
+                f"runtime_context.{field} state sentinels differ"
+            )
+        canonical[field] = [
+            values[field],
+            locator,
+            state,
+            record_id,
+            revision,
+            evidence,
+        ]
+    return canonical
+
+
+def derive_locator_and_context(
+    requirement: list[Any],
+    variant: dict[str, Any],
+    context: dict[str, list[Any]],
+) -> tuple[list[Any], str, bool]:
+    template = requirement[6]
+    selected = {"symphony": context["symphony"]}
+    resolved = []
+    for index, (template_slot, provider_slot) in enumerate(
+        zip(
+            variant["locator_template_shape"],
+            variant["provider_locator_shape"],
+        )
+    ):
+        template_kind, template_name = split_slot(
+            template_slot, f"template shape[{index}]"
+        )
+        provider_kind, provider_name = split_slot(
+            provider_slot, f"provider shape[{index}]"
+        )
+        if provider_kind == "literal":
+            resolved.append(provider_name)
+        elif provider_kind == "role":
+            resolved.append(requirement[5])
+        elif provider_kind == "selector":
+            selector = template[index]
+            if provider_name == "repository":
+                if selector != context["repository"][0]:
+                    raise SchemaError(
+                        "requirement repository differs from authoritative context"
+                    )
+                selected["repository"] = context["repository"]
+            resolved.append(selector)
+        elif provider_kind == "binding":
+            if template_kind != "token" or template_name != provider_name:
+                raise SchemaError("binding slot differs from template token")
+            selected[str(provider_name)] = context[str(provider_name)]
+            resolved.append(context[str(provider_name)][0])
+        else:
+            raise SchemaError("provider locator shape contains an unknown slot")
+    selected_pairs = [
+        [field, selected[field]]
+        for field in RUNTIME_CONTEXT_ORDER
+        if field in selected
+    ]
+    canonical_context = [
+        "maestro-evidence-binding-context-v1",
+        selected_pairs,
+    ]
+    selected_unresolved = any(
+        confirmation[0] == "unresolved" or confirmation[2] != "present"
+        for confirmation in selected.values()
+    )
+    return (
+        resolved,
+        digest("evidence-binding-context-v1", canonical_context),
+        selected_unresolved,
+    )
+
+
+def canonical_provider_result(
+    value: Any,
+    derived_locator: list[Any],
+    index: int,
+) -> tuple[str, str, str, str]:
+    result = exact_keys(
         value,
         {
-            "requirement",
             "resolved_locator",
-            "binding_context_revision",
-            "resolution_outcome",
             "evidence_state",
             "provider_record_id",
             "provider_revision",
+            "provider_evidence",
         },
-        "binding",
+        f"provider_results[{index}]",
     )
+    if result["resolved_locator"] != derived_locator:
+        raise SchemaError("provider result locator differs from derived locator")
+    state = text(result["evidence_state"], f"provider_results[{index}].evidence_state")
+    if state not in OBSERVABLE_STATES:
+        raise SchemaError("provider result state is not finite")
+    record_id = text(
+        result["provider_record_id"],
+        f"provider_results[{index}].provider_record_id",
+    )
+    revision = text(
+        result["provider_revision"],
+        f"provider_results[{index}].provider_revision",
+    )
+    evidence = text(
+        result["provider_evidence"],
+        f"provider_results[{index}].provider_evidence",
+    )
+    if state == "present":
+        if any(
+            item in OBSERVABLE_STATES
+            for item in (record_id, revision, evidence)
+        ):
+            raise SchemaError("present provider result requires identity/revision/evidence")
+    elif (record_id, revision, evidence) != (state, state, state):
+        raise SchemaError("non-present provider result sentinels must match state")
+    return state, record_id, revision, evidence
+
+
+def canonical_binding(schema: dict[str, Any], value: Any) -> tuple[list[Any], bool]:
+    if not isinstance(value, dict):
+        raise SchemaError("binding must be an object")
+    required_keys = {
+        "requirement",
+        "runtime_context",
+        "provider_query",
+        "provider_results",
+    }
+    if set(value) not in (required_keys, required_keys | {"assertions"}):
+        raise SchemaError("binding keys differ from authoritative input schema")
+    binding = value
     requirement, requirement_key, variant = canonical_requirement(
         schema, binding["requirement"]
     )
-    resolution = text(binding["resolution_outcome"], "resolution_outcome")
-    if resolution not in RESOLUTION_OUTCOMES:
-        raise SchemaError("resolution_outcome is not finite")
-    state = text(binding["evidence_state"], "evidence_state")
-    if state not in OBSERVABLE_STATES:
-        raise SchemaError("evidence_state is not finite")
-    record_id = text(binding["provider_record_id"], "provider_record_id")
-    provider_revision = text(binding["provider_revision"], "provider_revision")
-    if state == "present":
-        if record_id in OBSERVABLE_STATES or provider_revision in OBSERVABLE_STATES:
-            raise SchemaError("present binding requires provider identity/revision")
-    elif record_id != state or provider_revision != state:
-        raise SchemaError("non-present binding sentinels must match observable state")
-    if resolution == "unresolved" and state != "missing":
-        raise SchemaError("unresolved binding must use missing state and sentinels")
-    if resolution == "ambiguous" and state != "unavailable":
-        raise SchemaError("ambiguous binding must use unavailable state and sentinels")
-    role = binding["requirement"]["provider_record_role"]
-    if not shape_matches(
-        binding["resolved_locator"],
-        variant["provider_locator_shape"],
-        role,
-        "resolved_locator",
-        binding["requirement"]["locator_template"],
-    ):
-        raise SchemaError("resolved locator does not match provider locator shape")
-    has_unresolved = "unresolved" in binding["resolved_locator"]
-    if resolution == "exact" and has_unresolved:
-        raise SchemaError("exact binding contains an unresolved locator")
-    if resolution == "unresolved" and not has_unresolved:
-        raise SchemaError("unresolved binding lacks an unresolved locator")
-    context_revision = text(
-        binding["binding_context_revision"], "binding_context_revision"
+    context = canonical_runtime_context(binding["runtime_context"])
+    resolved_locator, context_revision, context_unresolved = derive_locator_and_context(
+        requirement,
+        variant,
+        context,
     )
+    query = exact_keys(
+        binding["provider_query"],
+        {"resolved_locator"},
+        "provider_query",
+    )
+    if query["resolved_locator"] != resolved_locator:
+        raise SchemaError("provider query locator differs from derived locator")
+    results = binding["provider_results"]
+    if not isinstance(results, list):
+        raise SchemaError("provider_results must be a list")
+    token_unresolved = any(value == "unresolved" for value in resolved_locator)
+    if token_unresolved and results:
+        raise SchemaError("unresolved runtime token cannot have provider results")
+    canonical_results = [
+        canonical_provider_result(result, resolved_locator, index)
+        for index, result in enumerate(results)
+    ]
+    if token_unresolved or context_unresolved or not canonical_results:
+        resolution = "unresolved"
+        state = record_id = provider_revision = provider_evidence = "missing"
+    elif len(canonical_results) > 1:
+        resolution = "ambiguous"
+        state = record_id = provider_revision = provider_evidence = "unavailable"
+    else:
+        resolution = "exact"
+        state, record_id, provider_revision, provider_evidence = canonical_results[0]
+    assertions = binding.get("assertions")
+    if assertions is not None:
+        assertions = exact_keys(
+            assertions,
+            {"resolved_locator", "binding_context_revision"},
+            "assertions",
+        )
+        if assertions["resolved_locator"] != resolved_locator:
+            raise SchemaError("asserted locator differs from derived locator")
+        if assertions["binding_context_revision"] != context_revision:
+            raise SchemaError("asserted context revision differs from derived revision")
     canonical = [
         "maestro-acceptance-evidence-binding-v1",
         requirement[1],
         requirement_key,
         requirement[4],
         requirement[6],
-        binding["resolved_locator"],
+        resolved_locator,
         context_revision,
         resolution,
         state,
         record_id,
         provider_revision,
+        provider_evidence,
     ]
     return canonical, resolution == "exact"
 

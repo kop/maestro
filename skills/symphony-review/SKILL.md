@@ -89,7 +89,11 @@ required validator is uncertainty, not a silent pass.
 
 ## Accept the prepared exact-head worktree
 
-Reconciliation confirms a pre-closure review worktree reservation, creates or
+Reconciliation first derives canonical `review-preparation-v1` from the full
+identity, plan-time requirements, preworktree provider bindings, capabilities,
+decision resolutions, plugin-owned source/policy closure, and exact-head
+repository source requirements. It confirms a pre-closure review worktree
+reservation that includes that preparation revision, creates or
 acquires the owned isolated detached worktree under its reservation-only marker,
 derives closure/action, confirms the durable reservation-to-action binding, and
 atomically updates the marker before `review-requested`. Cleanup by reservation
@@ -108,6 +112,9 @@ worktree path, canonical review directory, marker contents, reservation
 identity, bound action identity, attachment state, and current cleanup owner.
 If the marker claims a binding absent from the journal, fail closed and retain
 cleanup debt without dispatch or deletion.
+One reservation binds exactly one review action. A different exact-head
+repository closure, conflicting second action, or historical reservation is
+stale and cannot be selected as current.
 Confirmed dispatch atomically and durably changes that ledger owner from
 reconciliation to review before review work begins.
 
@@ -207,13 +214,16 @@ Revalidate worktree ownership, repository identity, and head before use.
 Compare the canonical input bytes and revision byte-for-byte with the revision
 actually reviewed.
 
-If any component differs, publish neither the GitHub record nor Linear
+After confirmed `review-requested` and before GitHub, if any component differs,
+publish neither the GitHub record nor Linear
 `@Cursor` follow-up. Append exactly one `review-input-stale` containing the old reviewed revision, new revision, changed component, and cleanup result; clean
 every owned worktree; and return the new input to `symphony-reconcile`. The new
 input is eligible and the stale result satisfies no gate. If the fresh input
 cannot be derived, publish nothing, append `action-failed` with the old revision,
-clean up, and follow bounded recovery. `review-stale-head` remains the legacy
-pre-review observation only; head movement in this complete post-review
+finite failure `review-input-underivable`, and no claim of a new eligible input;
+clean up and follow bounded recovery. Before `review-requested`,
+`review-stale-head` is the only head/context movement observation; head movement
+in this complete post-review
 comparison produces only the unified stale-input record and never publishes.
 
 ## Publish the outcome
@@ -281,7 +291,9 @@ attempt, append `action-failed` with its finite failure category. Use
 
 rule symphony-review-append-event-review-recorded | when canonical-exact-head-and-input-revision-review-record-is-confirmed | append event `review-recorded` | next review-gate-recorded | choice none
 
-rule symphony-review-append-event-review-input-stale | when full-input-changed-or-underivable-and-review-requested-is-confirmed | append event `review-input-stale` | next new-review-input-eligible | choice none
+rule symphony-review-append-event-review-input-stale-before-github | when derivable-full-input-changed-and-review-requested-is-confirmed-and-github-record-is-absent | append event `review-input-stale` | next new-review-input-eligible | choice none
+
+rule symphony-review-append-event-review-input-stale-after-github | when full-input-changed-or-underivable-and-confirmed-github-record-exists-and-linear-record-is-absent | append event `review-input-stale` | next github-record-historical-input-recovery | choice none
 
 rule symphony-review-append-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | append event `human-decision-required` | next affected-subgraph-paused | choice none
 
@@ -387,10 +399,20 @@ rule symphony-review-emit-failure-category-semantic-drift | when semantic-drift-
 rule symphony-review-consume-failure-category-semantic-drift | when semantic-drift-category-is-evidenced | consume failure category `semantic-drift` | next semantic-drift-recovery | choice none
 Retryability: Do not retry mutation; require bounded decision or strategic revision
 
-rule symphony-review-emit-failure-category-review-input-stale | when review-input-stale-after-request-category-is-evidenced | emit failure category `review-input-stale` | next new-review-input-eligible | choice none
+rule symphony-review-emit-failure-category-review-input-stale-derivable | when derivable-review-input-stale-after-request-category-is-evidenced | emit failure category `review-input-stale` | next new-review-input-eligible | choice none
 
-rule symphony-review-consume-failure-category-review-input-stale | when review-input-stale-after-request-category-is-evidenced | consume failure category `review-input-stale` | next new-review-input-eligible | choice none
-Retryability: Do not retry or publish the stale result; reconcile the newly derived input
+rule symphony-review-consume-failure-category-review-input-stale-derivable | when derivable-review-input-stale-after-request-category-is-evidenced | consume failure category `review-input-stale` | next new-review-input-eligible | choice none
+Retryability: Do not retry or publish the stale result; a derivable input becomes eligible, while an underivable post-GitHub input keeps that record historical and enters recovery
+
+rule symphony-review-emit-failure-category-review-input-stale-underivable-after-github | when underivable-review-input-stale-after-github-category-is-evidenced | emit failure category `review-input-stale` | next github-record-historical-input-recovery | choice none
+
+rule symphony-review-consume-failure-category-review-input-stale-underivable-after-github | when underivable-review-input-stale-after-github-category-is-evidenced | consume failure category `review-input-stale` | next github-record-historical-input-recovery | choice none
+Retryability: Do not retry or publish the stale result; a derivable input becomes eligible, while an underivable post-GitHub input keeps that record historical and enters recovery
+
+rule symphony-review-emit-failure-category-review-input-underivable | when review-input-underivable-before-github-category-is-evidenced | emit failure category `review-input-underivable` | next review-input-derivation-recovery | choice none
+
+rule symphony-review-consume-failure-category-review-input-underivable | when review-input-underivable-before-github-category-is-evidenced | consume failure category `review-input-underivable` | next review-input-derivation-recovery | choice none
+Retryability: Before GitHub, claim no new eligible revision; clean up and use bounded input-derivation recovery
 
 rule symphony-review-emit-failure-category-validation-timeout | when validation-timeout-category-is-evidenced | emit failure category `validation-timeout` | next validation-timeout-recovery | choice none
 

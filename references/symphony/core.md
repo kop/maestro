@@ -203,23 +203,47 @@ protocol and mechanically validate it with the plugin-owned
 `evidence-source-schema-v1.json` through
 `scripts/evidence-source-schema.py`. Pre-merge review selects only `review` and
 `both`; post-merge reconciliation selects only `reconciliation` and `both`.
-For every selected `evidence_requirement_key`, freshly resolve its finite
-locator template against the current implementation issue, linked PR, base,
-head, or merge. Create exactly one runtime binding entry, sorted by canonical
-requirement key:
+For every selected `evidence_requirement_key`, obtain the complete authoritative
+runtime context from confirmed provider reads: Symphony, implementation issue,
+repository, linked PR, base, head, and merge. The caller supplies provider query
+and result observations, never binding authority. The schema oracle
+requires each runtime-context value in a provider-confirmation envelope carrying
+its finite governing locator, observable provider state, native record identity,
+provider revision, and evidence. Only `present` confirmation can support exact
+resolution; a selected `missing`, `unavailable`, or unresolved governing value
+makes the binding unresolved and non-publishable. The governing locators mechanically link implementation to Symphony,
+repository to implementation, and PR/base/head/merge to the same implementation
+and repository; a flat, unrelated, or internally relinked context is rejected.
+The schema oracle
+canonicalizes the requirement first, selects only the context fields named by
+that requirement's finite locator-template shape, derives the binding-context
+revision, substitutes every token itself, and validates the provider query and
+result locator against that derived locator. Caller-supplied resolved locator or
+binding-context revision is only an assertion and must match the oracle's
+derived bytes exactly. Create exactly one runtime binding entry, sorted by
+canonical requirement key:
 
 Canonicalize the binding context as
-`["maestro-evidence-binding-context-v1","<Symphony UUID>","<implementation issue UUID or unresolved>","<owner/repository>","<linked PR native ID or unresolved>","<base SHA or unresolved>","<head SHA or unresolved>","<merge SHA or unresolved>",[[<declared token>,<exact resolved value or unresolved>],...]]`
+`["maestro-evidence-binding-context-v1",[[<selected context field>,<exact authoritative value or unresolved>],...]]`
 and digest it as
 `evidence-binding-context-v1:<lowercase SHA-256 hex>`. The token/value array is
-complete and sorted by token; no undeclared runtime value enters it.
+complete and sorted by the canonical context-field order. Each selected item
+contains the value plus its provider locator/state/identity/revision/evidence. It
+contains Symphony plus only the repository/locator token fields selected by the
+requirement's schema shape; no requirement identity or unselected runtime value
+enters it.
 
 ```text
-["maestro-acceptance-evidence-binding-v1","<criterion key>","<evidence requirement key>","<source kind>",<approved locator template>,<exact resolved provider locator>,"<binding context revision>","exact"|"unresolved"|"ambiguous","present"|"missing"|"unavailable","<provider-native record identity or sentinel>","<provider revision/content digest or sentinel>"]
+["maestro-acceptance-evidence-binding-v1","<criterion key>","<evidence requirement key>","<source kind>",<approved locator template>,<oracle-derived resolved provider locator>,"<oracle-derived binding context revision>","exact"|"unresolved"|"ambiguous","present"|"missing"|"unavailable","<provider-native record identity or sentinel>","<provider revision/content digest or sentinel>","<provider evidence or sentinel>"]
 ```
 
-The binding context revision covers the current Symphony/implementation/PR,
-repository, base, head, and merge resolution context. For
+The binding context revision covers exactly the selected authoritative runtime
+context, so an unrelated head, PR, issue, merge, or fabricated revision cannot
+be published. The requirement key is hashed only after normative Unicode and
+whitespace canonicalization, selector canonicalization, and safe
+repository-relative path normalization. Absolute paths, parent traversal,
+globs, backslash aliases, and forbidden path aliases are rejected rather than
+hashed. For
 `present`, both record identity and provider revision or exact content digest
 are required. For `missing` or `unavailable`, retain the approved requirement
 key and template, use an explicit `unresolved` token where no runtime value yet
@@ -271,9 +295,28 @@ Each applicable confirmed decision-resolution contributes
 Only an exact pause/revision match is applicable. Canonicalize all ordered sets,
 then serialize the complete input on one fixed field order:
 
-Before source closure exists, derive the stable review worktree reservation from
-`["maestro-review-worktree-reservation-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub repository native identity>","<PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>"]`
-as `review-worktree-reservation-v1:<lowercase SHA-256 hex>`. The reservation identity uses only pre-closure inputs and authorizes exact-head worktree creation, source-closure derivation, guarded cleanup, and recovery—never review dispatch or publication.
+Before source closure or worktree creation, derive canonical
+`review-preparation-v1` from the full Symphony/implementation/repository/PR/base/
+head/contract/DAG/policy identity, plan-time evidence requirements, every
+provider binding resolvable without repository bytes, current capabilities,
+applicable decision resolutions, the plugin-owned review source/policy closure,
+and repository source requirements bound to repository identity and exact head.
+The executable oracle is `scripts/review-preparation.py`; it requires the
+canonical plugin root, validates every nested requirement/binding/capability/
+decision/source-requirement schema, canonicalizes those values, and derives the
+plugin source/policy closure from the current exact bytes declared by
+`review-source-requirements-v1.json`. It never accepts a caller-fabricated
+closure revision. Same-head evidence,
+capability, decision, plugin-policy, base, or relink changes therefore produce a
+different preparation revision.
+
+Derive the stable review worktree reservation from
+`["maestro-review-worktree-reservation-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub repository native identity>","<PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review-preparation-v1 revision>"]`
+as `review-worktree-reservation-v1:<lowercase SHA-256 hex>`. Unchanged retries
+reuse the one current reservation; historical reservations are never current.
+The reservation authorizes exact-head worktree creation, source-closure
+derivation, reservation-only guarded cleanup, and recovery—never review dispatch
+or publication; one reservation maps to exactly one final review action.
 
 ```text
 ["maestro-review-input-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review source closure revision>","<acceptance evidence binding manifest revision>",[<lens/validator evidence manifest>],[<acceptance-evidence binding manifest>],[<applicable decision-resolution items>]]
@@ -308,12 +351,18 @@ review.
 Crash recovery is finite. A confirmed reservation with no worktree resumes
 creation. An attached worktree with no closure resumes closure derivation. A
 confirmed action binding with an old reservation-only marker updates the marker.
+A differing exact-head repository closure makes that preparation stale and
+cannot authorize a second action on the same reservation. A conflicting second
+action or historical reservation fails closed.
 A marker that claims an action binding absent from the journal fails closed,
 emits cleanup debt, and permits neither dispatch nor deletion. Cleanup before
 final action binding remains possible by exact reservation identity and guarded
 attachment state.
 
-Immediately before any GitHub review/comment publication, freshly re-read the
+The publication intervals are mutually exclusive. Before `review-requested`,
+remote head/context movement is only `review-stale-head`; it is never
+`review-input-stale`. After confirmed `review-requested` and before GitHub,
+immediately freshly re-read the
 complete context, re-resolve every evidence requirement template, rederive the
 acceptance-evidence binding manifest, rederive exact-head repository/plugin
 source closure and capability state, rederive applicable decision resolutions,
@@ -323,7 +372,8 @@ publishes neither GitHub nor Linear follow-up, appends one `review-input-stale`
 event containing old and new revisions plus the changed component, cleans the
 owned worktree, and returns the new eligible input to reconciliation. If a fresh
 input cannot be derived, fail closed with `action-failed` and the old revision;
-no publication identity is consumed.
+use finite failure `review-input-underivable` under bounded recovery, claim no
+new eligible input, and consume no publication identity.
 
 When the outcome requires a Linear `@Cursor` follow-up, the confirmed canonical
 GitHub record is only the first publication boundary. Immediately before Linear,
@@ -477,9 +527,10 @@ without its real instruction is invalid.
 | `review-requested` | Reconciler after the canonical current review input revision is durably confirmed | Authorizes review and publication for only that exact head and input revision |
 | `review-recorded` | Review skill after its exact-head and exact-input-revision GitHub record is confirmed | Reconciler consumes the current review verdict and next gate |
 | `review-stale-head` | Reconciler only when the head changes before `review-requested` or expensive review begins | Leaves the new head eligible without creating a reviewed result |
-| `review-input-stale` | Review skill when any full-input change occurs after `review-requested` or review execution begins | Records old/new or underivable revision, invalidates the stale result for current gates, and leaves only a derivable new input eligible |
+| `review-input-stale` | Review skill after `review-requested`: for derivable change before GitHub, or changed/underivable input after confirmed GitHub and before Linear | Invalidates the stale result; only a derived revision is eligible, while an underivable post-GitHub input enters recovery with the GitHub record historical |
 | `merge-observed` | Reconciler for every confirmed GitHub merge not yet reconciled | Preserves merge identity while keeping “merged” distinct from “merge-reconciled” |
-| `merge-reconciled` | Reconciler only after a complete, evidenced reconciler verdict | Completes only that implementation issue and permits downstream readiness recalculation |
+| `merge-reconciled` | Reconciler only after a complete, evidenced reconciler verdict over the exact current reconciliation binding manifest | Confirms only the merge-reconciliation record; authorizes a separate implementation-completion transition |
+| `implementation-completed` | Reconciler only after consuming confirmed `merge-reconciled` | Completes only that implementation issue and permits downstream readiness recalculation |
 | `human-decision-required` | Start/review/reconcile when human authority is required | Records prior/resume phase and locks only the affected subgraph |
 | `decision-resolved` | Start/reconcile after a declared disposition and required approval evidence | Closes one historical pause and authorizes removal of its pause label plus restoration of only its recorded resume phase |
 | `follow-up-created` | Reconciler after a required follow-up issue is confirmed | Closeout consumes the confirmed follow-up inventory |
@@ -529,7 +580,8 @@ No other action outcome is valid.
 | `mutation-ambiguous` | Search by native target and action identity before any retry |
 | `semantic-drift` | Do not retry mutation; require bounded decision or strategic revision |
 | `review-stale-head` | Do not retry the stale identity; create a new identity for the new head |
-| `review-input-stale` | Do not retry or publish the stale result; reconcile the newly derived input |
+| `review-input-stale` | Do not retry or publish the stale result; a derivable input becomes eligible, while an underivable post-GitHub input keeps that record historical and enters recovery |
+| `review-input-underivable` | Before GitHub, claim no new eligible revision; clean up and use bounded input-derivation recovery |
 | `validation-timeout` | Terminate, clean up, and retry only within the unchanged-state budget |
 | `capability-lost` | Pause dependent operations until capability changes |
 | `cleanup-failed` | Retry only ownership-checked cleanup; blocks Symphony closeout |
@@ -601,10 +653,12 @@ or choice group.
 | `event` | `review-worktree-action-bound` | `both` | `reservation-to-final-review-action-binding-is-confirmed` | `action-binding-confirmed` | `none` |
 | `event` | `review-requested` | `both` | `canonical-review-input-revision-is-durably-confirmed` | `review-revision-eligible` | `none` |
 | `event` | `review-recorded` | `both` | `canonical-exact-head-and-input-revision-review-record-is-confirmed` | `review-gate-recorded` | `none` |
-| `event` | `review-stale-head` | `both` | `remote-pr-head-changed-and-review-requested-is-absent` | `review-new-head` | `none` |
-| `event` | `review-input-stale` | `both` | `full-input-changed-or-underivable-and-review-requested-is-confirmed` | `new-review-input-eligible` | `none` |
+| `event` | `review-stale-head` | `both` | `remote-pr-head-or-context-preparation-changed-and-review-requested-is-absent` | `review-new-head` | `none` |
+| `event` | `review-input-stale` | `both` | `derivable-full-input-changed-and-review-requested-is-confirmed-and-github-record-is-absent` | `new-review-input-eligible` | `none` |
+| `event` | `review-input-stale` | `both` | `full-input-changed-or-underivable-and-confirmed-github-record-exists-and-linear-record-is-absent` | `github-record-historical-input-recovery` | `none` |
 | `event` | `merge-observed` | `both` | `github-merge-sha-is-freshly-confirmed` | `merge-reconciliation-pending` | `none` |
-| `event` | `merge-reconciled` | `both` | `merge-reconciliation-is-complete-and-evidenced` | `implementation-complete` | `none` |
+| `event` | `merge-reconciled` | `both` | `merge-reconciliation-is-complete-and-evidenced` | `merge-reconciled-confirmed` | `none` |
+| `event` | `implementation-completed` | `both` | `confirmed-merge-reconciled-is-consumed-by-separate-implementation-transition` | `implementation-complete` | `none` |
 | `event` | `human-decision-required` | `both` | `bounded-or-strategic-human-authority-is-required` | `affected-subgraph-paused` | `none` |
 | `event` | `decision-resolved` | `both` | `resolution-disposition-and-resume-evidence-are-confirmed` | `recorded-resume-phase` | `none` |
 | `event` | `follow-up-created` | `both` | `required-follow-up-identity-is-confirmed` | `follow-up-inventory-confirmed` | `none` |
@@ -623,7 +677,9 @@ or choice group.
 | `failure-category` | `mutation-ambiguous` | `both` | `mutation-ambiguous-category-is-evidenced` | `mutation-ambiguous-recovery` | `none` |
 | `failure-category` | `semantic-drift` | `both` | `semantic-drift-category-is-evidenced` | `semantic-drift-recovery` | `none` |
 | `failure-category` | `review-stale-head` | `both` | `review-stale-head-before-request-category-is-evidenced` | `review-stale-head-recovery` | `none` |
-| `failure-category` | `review-input-stale` | `both` | `review-input-stale-after-request-category-is-evidenced` | `new-review-input-eligible` | `none` |
+| `failure-category` | `review-input-stale` | `both` | `derivable-review-input-stale-after-request-category-is-evidenced` | `new-review-input-eligible` | `none` |
+| `failure-category` | `review-input-stale` | `both` | `underivable-review-input-stale-after-github-category-is-evidenced` | `github-record-historical-input-recovery` | `none` |
+| `failure-category` | `review-input-underivable` | `both` | `review-input-underivable-before-github-category-is-evidenced` | `review-input-derivation-recovery` | `none` |
 | `failure-category` | `validation-timeout` | `both` | `validation-timeout-category-is-evidenced` | `validation-timeout-recovery` | `none` |
 | `failure-category` | `capability-lost` | `both` | `capability-lost-category-is-evidenced` | `capability-lost-recovery` | `none` |
 | `failure-category` | `cleanup-failed` | `both` | `cleanup-failed-category-is-evidenced` | `cleanup-failed-recovery` | `none` |
@@ -643,7 +699,7 @@ or choice group.
 | `review-verdict` | `changes-required` | `both` | `aggregate-strategic-decision-is-absent-and-actionable-defect-is-present` | `review-changes-required` | `review-verdict` |
 | `review-verdict` | `human-decision` | `both` | `aggregate-strategic-decision-is-present` | `review-human-decision` | `review-verdict` |
 | `review-verdict` | `inconclusive` | `both` | `aggregate-strategic-decision-and-actionable-defect-are-absent-and-required-evidence-is-missing` | `review-inconclusive` | `review-verdict` |
-| `reconciliation-verdict` | `complete` | `both` | `aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-present-and-complete-is-evidenced` | `implementation-complete` | `reconciliation-verdict` |
+| `reconciliation-verdict` | `complete` | `both` | `aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-present-and-complete-is-evidenced` | `merge-reconciliation-eligible` | `reconciliation-verdict` |
 | `reconciliation-verdict` | `human-decision` | `both` | `aggregate-reconciliation-decision-is-required` | `reconciliation-human-decision` | `reconciliation-verdict` |
 | `reconciliation-verdict` | `inconclusive` | `both` | `aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-missing` | `reconciliation-inconclusive` | `reconciliation-verdict` |
 

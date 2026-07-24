@@ -24,6 +24,7 @@ mkdir -p \
 mandatory_sources=(
   review-source-requirements-v1.json
   scripts/review-source-closure.py
+  scripts/review-preparation.py
   evidence-source-schema-v1.json
   scripts/evidence-source-schema.py
   skills/symphony-review/SKILL.md
@@ -46,6 +47,7 @@ printf '%s\n' \
   '  "mandatory_plugin_sources": [' \
   '    "review-source-requirements-v1.json",' \
   '    "scripts/review-source-closure.py",' \
+  '    "scripts/review-preparation.py",' \
   '    "evidence-source-schema-v1.json",' \
   '    "scripts/evidence-source-schema.py",' \
   '    "skills/symphony-review/SKILL.md",' \

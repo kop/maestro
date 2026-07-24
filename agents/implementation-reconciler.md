@@ -19,13 +19,20 @@ updates to the main `symphony-reconcile` skill.
 
 Require the Symphony issue, implementation issue UUID and contract revision,
 approved DAG revision, final PR, merge SHA, final diff, resolved Maestro findings,
-upstream issues, downstream issues, and Symphony outcome. Missing merge identity
-is a hard inconclusive result.
+upstream issues, downstream issues, Symphony outcome, and the controller's
+canonical exact post-merge reconciliation binding manifest/revision. Every
+manifest entry must contain criterion/requirement key, evidence stage, source
+kind and static role, binding-context revision, resolved locator, resolution
+outcome, observable state, and provider identity/revision/evidence. Missing
+merge identity or any unresolved, ambiguous, missing, unavailable, omitted,
+stale, or mismatched required `reconciliation`/`both` entry is a hard
+inconclusive result and makes `complete` impossible.
 
 ## Reconciliation process
 
 1. Describe observable delivered behavior, not merely changed files.
-2. Compare every acceptance criterion with final evidence.
+2. Echo every supplied binding entry/key exactly and compare every acceptance
+   criterion with only its mapped binding evidence.
 3. Compare proposed and actual interfaces, data flow, migration, and operations.
 4. Classify each deviation:
    - `local`: no downstream impact;
@@ -34,6 +41,12 @@ is a hard inconclusive result.
    - `strategic`: objective, scope, acceptance, or approved DAG is no longer valid.
 5. Propose only bounded downstream edits allowed by the protocol.
 6. Name every change requiring explicit user approval.
+
+Map every acceptance, deviation, and follow-up conclusion to the exact
+requirement keys and bindings that support it. Do not infer an omitted binding
+or replace the controller's resolved locator. The controller recomputes the
+canonical reconciliation binding manifest before accepting your result; a
+manifest or identity mismatch invalidates the whole result.
 
 The reconciler identity is the complete `Merge identity` table below. Normalize exactly three booleans: decision required, identity or required evidence missing, and complete and evidenced. Apply total precedence once: return
 `human-decision` whenever decision is required; otherwise return `inconclusive`
@@ -49,7 +62,7 @@ normalized discovered gap before any create.
 
 Return exactly the reconciliation verdict selected by those conditions:
 
-rule implementation-reconciler-return-reconciliation-verdict-complete | when aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-present-and-complete-is-evidenced | return reconciliation verdict `complete` | next implementation-complete | choice reconciliation-verdict
+rule implementation-reconciler-return-reconciliation-verdict-complete | when aggregate-reconciliation-decision-is-not-required-and-identity-or-required-evidence-is-present-and-complete-is-evidenced | return reconciliation verdict `complete` | next merge-reconciliation-eligible | choice reconciliation-verdict
 
 rule implementation-reconciler-return-reconciliation-verdict-human-decision | when aggregate-reconciliation-decision-is-required | return reconciliation verdict `human-decision` | next reconciliation-human-decision | choice reconciliation-verdict
 
@@ -69,6 +82,11 @@ Issue UUID:
 Merge SHA:
 Issue contract revision:
 DAG revision:
+Reconciliation binding manifest revision:
+
+## Reconciliation binding manifest
+| Criterion key | Requirement key | Evidence stage | Source kind | Static role | Binding context revision | Resolved locator | Resolution outcome | Observable state | Provider identity | Provider revision | Provider evidence |
+|---|---|---|---|---|---|---|---|---|---|---|---|
 
 ## Delivered outcome
 
@@ -77,8 +95,8 @@ DAG revision:
   Evidence:
 
 ## Acceptance criteria
-| Criterion | satisfied | Evidence |
-|---|---|---|
+| Criterion | satisfied | Requirement keys | Exact binding references | Evidence |
+|---|---|---|---|---|
 
 ## Deviations and decisions
 - Classification: local | downstream-plan-change | follow-up-required | strategic
@@ -86,6 +104,7 @@ DAG revision:
   Actual:
   Reason:
   Consequence:
+  Requirement keys and exact binding references:
 
 ## Interfaces created or changed
 - Interface:
@@ -112,6 +131,7 @@ DAG revision:
   Repository:
   Required outcome:
   Normalized gap/evidence:
+  Requirement keys and exact binding references:
   Dependency impact:
   Acceptance criteria:
 

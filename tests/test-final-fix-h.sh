@@ -111,10 +111,10 @@ assert_contains "$status_skill" \
 assert_contains "$status_skill" \
   'historical.*cannot satisfy'
 assert_contains "$failure_fixture" \
-  '^evidence_stage_review_ignores_reconciliation_unresolved[[:space:]]'
+  '^merge_reconciliation_unresolved_blocks_completion[[:space:]]'
 assert_contains "$failure_fixture" \
-  '^evidence_stage_reconciliation_unresolved_blocks_closeout[[:space:]]'
+  '^implementation_completion_after_reconciliation[[:space:]]'
 assert_contains "$failure_fixture" \
-  '^evidence_stage_reconciliation_exact_allows_closeout[[:space:]]'
+  '^symphony_closeout_after_all_gates[[:space:]]'
 
 pass "Final Fix H acyclic preparation and atomic publication"

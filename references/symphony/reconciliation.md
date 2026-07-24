@@ -116,23 +116,38 @@ reconciliation attempt. Then:
    `reconciliation` or `both`. A reconciliation-stage repository commit binds
    `${current_merge}`; a review-stage repository commit bound `${current_head}`
    before merge and is not reinterpreted. Require canonical
-   `resolution_outcome=exact` for every selected binding.
-3. Run `implementation-reconciler`.
-4. Validate the reconciler identity against the implementation issue UUID,
-   contract revision, approved DAG revision, PR, and merge SHA; validate its
-   verdict and complete acceptance-evidence table.
+   `resolution_outcome=exact` for every selected binding. Derive the exact
+   canonical reconciliation binding manifest before dispatch. Every entry contains the
+   criterion and requirement key, evidence stage, source kind and static
+   provider role, oracle-derived binding-context revision and resolved locator,
+   resolution outcome, observable state, and provider identity, revision, and
+   evidence.
+3. Run `implementation-reconciler` with that complete canonical manifest and
+   its digest in the request identity.
+4. Recompute the authoritative runtime context and canonical reconciliation
+   binding manifest before accepting the response. Require byte-for-byte
+   equality with the dispatched manifest, then validate the reconciler identity
+   against the implementation issue UUID, contract revision, approved DAG
+   revision, PR, merge SHA, and manifest revision. Require its echoed table to
+   repeat every entry/key and map every acceptance, deviation, and follow-up
+   conclusion to those exact bindings; this is the complete acceptance-evidence table.
 5. Follow the verdict transition below.
 
 Only verdict `complete`, with every acceptance criterion satisfied and every
 post-merge `reconciliation`/`both` requirement exactly bound and evidenced,
-may append `Actual implementation`, confirmed deviations and acceptance evidence,
-apply bounded downstream updates, confirm required follow-up issues, record the
-merge-reconciliation action identity as `merge-reconciled`, move the issue to an
-unambiguous existing native completed status, apply its completion phase, or
-unlock dependants.
-An unresolved or ambiguous post-merge binding keeps `merge-reconciled`,
+may persist the merge-reconciliation record and append exactly one
+`merge-reconciled`. An unresolved, ambiguous, missing, unavailable, omitted,
+stale, or mismatched post-merge binding makes `complete` impossible and keeps `merge-reconciled`,
 implementation completion, dependant unlock, and Symphony closeout blocked and
 follows bounded recovery.
+
+Implementation completion is a separate later transition that consumes a
+confirmed `merge-reconciled`; only then may the controller append `Actual
+implementation`, confirmed deviations and acceptance evidence, apply bounded
+downstream updates, confirm required follow-up issues, move the implementation
+issue to an unambiguous existing completed status, apply its completion phase,
+or unlock dependants. Symphony closeout remains a third, later transition and
+no merge transition may close the Symphony.
 
 For `human-decision`, append the observed merge and `human-decision-required`
 with the decision evidence, affected subgraph, and prior/resume phase. Use

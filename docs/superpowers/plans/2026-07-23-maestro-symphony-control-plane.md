@@ -707,24 +707,38 @@ Missing identity makes the review `inconclusive`; it never permits guessing.
 
 When any reviewer must execute commands:
 
-1. Locate or fetch the repository without changing a user branch.
-2. Create a unique directory beneath a dedicated Maestro temporary review root.
-3. Derive its name from sanitized native IDs, never issue or PR titles.
-4. Write an adjacent ownership marker containing Symphony UUID, repository,
-   PR native ID, head SHA, and review action identity.
-5. Resolve canonical paths and verify component-level containment under the root.
-6. Add a detached Git worktree at the exact PR head SHA.
+1. Derive every plan-time evidence binding from authoritative runtime context;
+   caller locators and binding-context revisions are assertions only.
+2. Before repository bytes are needed, derive `review-preparation-v1` from the
+   full Symphony/implementation/repository/PR/base/head/governance identity,
+   plan-time requirements and preworktree bindings, capabilities, decision
+   resolutions, plugin source/policy closure, and exact-head repository source
+   requirements.
+3. Derive one current reservation containing that preparation revision. Create
+   the dedicated review directory and write only the reservation to the initial
+   reservation-only cleanup ledger and ownership marker.
+4. Resolve canonical paths, prove component containment, and add a verified
+   detached Git worktree at the exact PR head SHA.
+5. Derive repository closure and the final review action. A differing closure
+   makes the preparation stale; it never creates a second action on the same
+   reservation.
+6. Append and confirm exactly one reservation-to-action journal binding, then
+   atomically update the marker to that bound action.
 7. Run all commands with that worktree as the exact working directory.
 8. Apply an explicit timeout to every command.
 9. Compare tracked and staged changes before and after validation.
-10. Re-read the remote PR head before publishing.
+10. Apply both publication gates: after request and before GitHub, then after
+    GitHub and before Linear. Underivable input before GitHub is `action-failed`;
+    after GitHub it is `review-input-stale` and the GitHub record is historical.
 11. Remove the expected worktree through Git, then delete only the owned review
     directory and transient artifacts.
 
-Cleanup requires both a matching marker and Git metadata matching the expected
-repository/path. Never delete unmarked, mismatched, or user-created worktrees.
-Reserved setup directories may be removed only when the marker matches and no
-repository or unexpected file exists.
+Before action binding, reservation-only cleanup requires the exact confirmed
+reservation plus matching ledger/marker, containment, attachment, and repository
+state. After action binding, guarded cleanup requires both the reservation and
+bound action identity. Never delete unmarked, mismatched, or user-created
+worktrees. Reserved setup directories may be removed only when the reservation
+marker matches and no repository or unexpected file exists.
 
 Unexpected tracked changes invalidate evidence that depends on them. Record the
 observation, publish no patch, and discard the worktree. Build caches, screenshots,
@@ -1949,22 +1963,25 @@ required validator is uncertainty, not a silent pass.
 
 Before any command-running reviewer starts:
 
-1. Locate or clone/fetch the repository without checking out a user branch.
-2. Use `${TMPDIR:-/tmp}/maestro-symphony-reviews` as the dedicated temporary
+1. Reconfirm the current `review-preparation-v1` and its one current reservation.
+2. Locate or clone/fetch the repository without checking out a user branch.
+3. Use `${TMPDIR:-/tmp}/maestro-symphony-reviews` as the dedicated temporary
    review root and create one unique review directory beneath it.
-3. Derive the directory name from sanitized native IDs.
-4. Write an ownership marker beside the future worktree containing Symphony UUID,
-   repository, PR native ID, exact PR head SHA, and review action identity.
+4. Derive the directory name from sanitized native IDs and write a
+   reservation-only ownership marker beside the future worktree.
 5. Canonicalize root and child paths and verify component-level containment.
 6. Add a detached Git worktree at the exact PR head SHA.
 7. Verify `HEAD` equals the requested SHA and tracked and staged state is clean.
+8. Derive repository closure and the final action, confirm the durable
+   one-reservation-to-one-action binding, and only then update the marker.
 
 Parallel command-running reviewers receive separate owned worktrees. A reviewer
 that only needs the diff and supplied context receives no worktree.
 
-Maintain an explicit cleanup ledger in memory containing repository, canonical
-worktree path, canonical review directory, marker contents, and attachment state
-for every created directory.
+Maintain an explicit durable cleanup ledger containing repository, canonical
+worktree path, canonical review directory, preparation/reservation, optional
+confirmed bound action, marker contents, owner, and attachment state for every
+created directory.
 
 ## Dispatch reviewers
 
@@ -2247,20 +2264,30 @@ a merge-reconciliation identity never unlocks dependants.
 For every merged PR lacking a confirmed merge action identity:
 
 1. Re-read the final PR and merge SHA.
-2. Obtain the final diff and relevant repository evidence.
+2. Resolve every `reconciliation` and `both` evidence requirement from
+   authoritative runtime context and build the canonical exact post-merge
+   binding manifest.
 3. Dispatch `maestro:implementation-reconciler` with the complete reconciliation
-   envelope.
-4. Validate the returned merge identity and evidence.
-5. Append `Actual implementation`, `Deviations and decisions`, and `Follow-up
-   work` without replacing the original issue contract.
-6. Apply only allowed bounded edits to undispatched downstream context, proposed
+   envelope and manifest/revision.
+4. Recompute the manifest before acceptance; validate same request identity,
+   byte equality, every echoed entry/key, and every acceptance/deviation/
+   follow-up conclusion against its exact bindings.
+5. Only an exact, satisfied `complete` result may persist reconciliation and
+   append `merge-reconciled`. Unresolved, ambiguous, missing, unavailable,
+   omitted, stale, or mismatched required bindings block it.
+6. In a separate transition after confirmed `merge-reconciled`, append `Actual
+   implementation`, `Deviations and decisions`, and `Follow-up work` without
+   replacing the original issue contract.
+7. Apply only allowed bounded edits to undispatched downstream context, proposed
    approach, validation, and dependency notes.
-7. Create proposed follow-up issues idempotently when required.
-8. Pause and request approval for objective, scope, acceptance, strategic DAG, or
+8. Create proposed follow-up issues idempotently when required.
+9. Pause and request approval for objective, scope, acceptance, strategic DAG, or
    running-work changes.
-9. Confirm the merge action identity externally, then move the issue to the
-   appropriate existing completed status and apply `maestro:complete`.
-10. Recalculate downstream readiness.
+10. Move only the implementation issue to the appropriate existing completed
+    status, apply `maestro:complete`, and recalculate downstream readiness.
+11. Evaluate Symphony closeout later as a separate transition and append
+    `symphony-completed` exactly once only after every closeout gate. A merge
+    transition never closes the Symphony.
 
 An ambiguous write is searched by native target/action identity before retry.
 

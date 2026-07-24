@@ -198,14 +198,14 @@ pre_request_input=$(reduce_controller_state \
   fail "review-input-stale remained available before review-requested"
 
 shortcut_review=$(reduce_controller_state \
-  'surface=evidence-stage-lifecycle;phase=review;review_binding=exact;reconciliation_binding=unresolved;merge=absent')
-[[ "$shortcut_review" != *$'allowed_mutations\tpersist-review-request'* ]] ||
+  'surface=review-preparation;worktree=verified;closure=derived;request_event=recorded;dispatch=absent;ownership=reconciler')
+[[ "$shortcut_review" != *$'allowed_mutations\tdispatch-review'* ]] ||
   fail "stage lifecycle bypassed reservation/action-binding/marker review gates"
 
 shortcut_closeout=$(reduce_controller_state \
-  'surface=evidence-stage-lifecycle;phase=reconciliation;reconciliation_binding=exact;merge=observed')
+  'surface=merge-reconciliation;merge=observed;binding_manifest=exact-current;manifest_recompute=exact-current-match;reconciler_result=validated-same-identity;reconciler_echo=complete-exact;conclusion_mapping=exact;reconciliation_identity=current-match;acceptance=satisfied;verdict=complete;merge_reconciled=absent')
 [[ "$shortcut_closeout" != *complete-implementation* &&
-   "$shortcut_closeout" != *close-symphony* ]] ||
+   "$shortcut_closeout" != *finalize-control-outcome* ]] ||
   fail "stage lifecycle bypassed evidenced reconciliation/closeout gates"
 
 combined_timeout=$(reduce_controller_state \
@@ -231,14 +231,14 @@ combined_changed_timeout_unresolved=$(reduce_controller_state \
   fail "state change without exact durable resolution escaped timeout pause"
 
 first_reconcile=$(reduce_controller_state \
-  'surface=reconciler;merge=observed;verdict=inconclusive')
+  'surface=merge-reconciliation;merge=observed;binding_manifest=exact-current;manifest_recompute=exact-current-match;reconciler_result=validated-same-identity;reconciler_echo=complete-exact;conclusion_mapping=exact;reconciliation_identity=current-match;verdict=inconclusive')
 later_reconcile=$(reduce_controller_state \
-  'surface=reconciler;merge=observed;prior_reconcile=inconclusive;merge_reconciled=absent;verdict=complete')
+  'surface=merge-reconciliation;merge=observed;binding_manifest=exact-current;manifest_recompute=exact-current-match;reconciler_result=validated-same-identity;reconciler_echo=complete-exact;conclusion_mapping=exact;reconciliation_identity=current-match;acceptance=satisfied;verdict=complete;merge_reconciled=absent')
 repeated_reconcile=$(reduce_controller_state \
-  'surface=reconciler;merge=observed;merge_reconciled=recorded;verdict=complete')
-[[ "$first_reconcile" == *$'journal_events\tmerge-observed,action-failed'* &&
+  'surface=merge-reconciliation;merge=observed;binding_manifest=exact-current;manifest_recompute=exact-current-match;reconciliation_identity=current-match;merge_reconciled=recorded')
+[[ "$first_reconcile" == *$'journal_events\taction-failed'* &&
    "$later_reconcile" == *$'journal_events\tmerge-reconciled'* &&
-   "$later_reconcile" == *$'suppressed_actions\tduplicate-merge-observed'* &&
+   "$later_reconcile" == *implementation-completion* &&
    "$repeated_reconcile" == *$'journal_events\tnone'* &&
    "$repeated_reconcile" == *duplicate-merge-reconciled* ]] ||
   fail "merge-observed/inconclusive recovery did not reconcile exactly once"

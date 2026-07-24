@@ -13,7 +13,10 @@ tests=(
   tests/test-final-fix-f.sh
   tests/test-final-fix-g.sh
   tests/test-evidence-source-schema.sh
+  tests/test-authoritative-evidence-binding.sh
+  tests/test-review-preparation.sh
   tests/test-final-fix-h.sh
+  tests/test-final-fix-i.sh
   tests/test-review-source-closure.sh
   tests/test-planning-agents.sh
   tests/test-review-agents.sh
