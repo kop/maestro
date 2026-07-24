@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Linear and GitHub control plane for planning issue DAGs, delegating implementation to Cursor, contextual PR review, and post-merge reconciliation",
   "author": { "name": "kop" }
 }

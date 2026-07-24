@@ -8,7 +8,7 @@ delegates implementation to Cursor, reviews exact PR revisions in the context of
 the whole goal, and reconciles merged reality into downstream issues. Maestro does
 not implement product code or merge PRs.
 
-Current plugin version: **0.2.0**.
+Current plugin version: **0.2.1**.
 
 ## Install
 

@@ -44,7 +44,7 @@ do
   assert_file "$path"
 done
 
-assert_contains .claude-plugin/plugin.json '"version":[[:space:]]*"0\.2\.0"'
+assert_contains .claude-plugin/plugin.json '"version":[[:space:]]*"0\.2\.1"'
 assert_contains .claude-plugin/plugin.json 'Linear and GitHub control plane'
 assert_contains .claude-plugin/marketplace.json '"description"'
 
@@ -52,7 +52,7 @@ assert_contains README.md '/maestro:symphony-start'
 assert_contains README.md '/maestro:symphony-reconcile'
 assert_contains README.md '/maestro:symphony-status'
 assert_contains README.md '@Cursor'
-assert_contains README.md '0\.2\.0'
+assert_contains README.md '0\.2\.1'
 assert_contains README.md 'epic, milestone, Linear project, broader goal, or existing Symphony issue'
 assert_contains README.md 'Planning is discovery-first'
 assert_contains README.md 'research and architecture subagents gather evidence'
