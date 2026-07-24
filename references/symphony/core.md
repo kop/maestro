@@ -125,28 +125,26 @@ SHA-256, and lowercase-hex rules.
 
 ### Review source closure
 
-The complete source descriptor is fixed as `review-source-closure-v1`. It has
-exactly `plugin_sources`, `policy_sources`, and `validators`. Internal Maestro
-agent/lens sources are explicit plugin-relative paths declared by the review
-policy. Repository instructions and every other policy input are explicit
+The complete source descriptor is fixed as `review-source-closure-v1`. Its
+caller-authored fields are exactly `selected_lenses`, `policy_sources`, and
+`validators`; a caller cannot supply plugin authority paths. The plugin-owned manifest is fixed at `review-source-requirements-v1.json` relative to the
+confirmed plugin root. The executable loads only that path and rejects a
+substituted requirements file.
+
+The manifest includes its own path, `scripts/review-source-closure.py`, the
+internal review skill, every Symphony reference declared by that skill,
+`agents/symphony-reviewer.md`, and the finite source-path mapping for every
+selectable lens. The exact mandatory set plus exact mapped paths for the selected
+lenses is authoritative. Unknown lenses, missing files, extra caller-authored
+behavior-authority paths, or an incomplete manifest fail closed. Every required
+file is hashed by exact bytes, including the manifest and executable.
+
+Repository instructions and every other issue/review-policy input are explicit
 repository-relative `policy_sources`. Each validator declares one finite kind,
 its normalized exact command or inspection descriptor, an explicit ordered
 configuration-source path list (including an explicit empty list), the assertion
 that all implicit sources are declared, and capability state/name/version.
 The validator command, explicit configuration paths, and capability state are all revision inputs.
-
-The authoritative review-source requirements are a separate, durably confirmed
-`review-source-requirements-v1` record derived from the exact review policy and
-implementation issue contract, never from reviewer discovery or a
-self-assertion in the closure descriptor. It contains exact required plugin
-paths, exact required repository policy paths, and the finite validator key,
-command, configuration paths, and capability name for every required validator.
-It always contains `agents/symphony-reviewer.md`; selected risk lenses add their
-exact agent paths. The oracle rejects any missing or extra descriptor path,
-validator, configuration source, or capability name relative to this
-authoritative record. Its canonical revision is
-`review-source-requirements-v1:<lowercase SHA-256 hex>` and is itself included in
-the source closure.
 
 Validator kinds are exactly `issue-validation-command`,
 `kubernetes-helm-render`, `docker-build-runtime`, or
@@ -157,36 +155,71 @@ agent identifiers. Validator stable keys use the `maestro-review-validator-key-v
 Normalize every path to Unicode NFC and repository-relative forward-slash form.
 Remove only redundant `.` components; reject absolute paths, escaping `..` components, backslashes, glob syntax, empty paths, and symlink resolution outside
 the confirmed root. Paths are exact and never expanded or session-selected.
-Resolve plugin paths from the confirmed plugin root and repository/policy paths
-from the confirmed repository root. For each exact path, hash exact file bytes with SHA-256; do not require or consult Git metadata. Record
+Resolve plugin paths from the confirmed plugin root. Plugin hashing does not
+require or consult Git metadata. Resolve repository/policy paths only from an
+owned detached worktree whose confirmed GitHub `owner/repository` identity and
+`git rev-parse HEAD` exactly equal the expected repository and head SHA. Reject
+a stale, unrelated, dirty, non-root, attached-branch, or unverifiable root.
+For each exact path, hash exact file bytes with SHA-256. Record
 `["<plugin-source|policy-source|validator-config>","<normalized path>","present","sha256:<digest>"]`
 or use the exact state/revision pairs `"missing","missing"` and
 `"unavailable","unavailable"`.
 
 Canonicalize and sort source entries and validators, then serialize
-`["review-source-closure-v1","<review-source requirements revision>",[<plugin sources>],[<policy sources>],[<validator descriptors>]]`.
+`["review-source-closure-v1","<plugin-owned requirements exact-byte revision>",["repository-binding-v1","<owner/repository>","<expected head SHA>"],[<selected lenses>],[<plugin sources>],[<policy sources>],[<validator descriptors>]]`.
 Its revision is `review-source-closure-v1:<lowercase SHA-256 hex>`. The executable
-oracle is `scripts/review-source-closure.py`; it requires both the authoritative
-requirements record and the observed descriptor. If a validator depends on implicit source closure that is not explicitly listed, append `action-failed`: publish nothing and use bounded recovery.
+oracle is `scripts/review-source-closure.py`; ordinary operation cannot pass a
+requirements path and must pass the expected repository identity and head SHA.
+If a validator depends on implicit source closure that is not explicitly listed,
+append `action-failed`: publish nothing and use bounded recovery.
 The controller never guesses a path.
 
 ### Acceptance-evidence manifest
 
-Read the exact key-bearing acceptance contract defined by the Linear protocol.
-For every required `evidence_key`, resolve its finite source kind and
-deterministic provider locator. Create exactly one entry, sorted by canonical
-evidence key:
+Read the exact plan-time evidence-requirement contract defined by the Linear
+protocol. For every `evidence_requirement_key`, freshly resolve its finite
+locator template against the current implementation issue, linked PR, base,
+head, merge, and provider-record role bindings. Create exactly one runtime
+binding entry, sorted by canonical requirement key:
+
+Canonicalize the binding context as
+`["maestro-evidence-binding-context-v1","<Symphony UUID>","<implementation issue UUID or unresolved>","<owner/repository>","<linked PR native ID or unresolved>","<base SHA or unresolved>","<head SHA or unresolved>","<merge SHA or unresolved>",[[<declared token>,<exact resolved value or unresolved>],...]]`
+and digest it as
+`evidence-binding-context-v1:<lowercase SHA-256 hex>`. The token/value array is
+complete and sorted by token; no undeclared runtime value enters it.
 
 ```text
-["maestro-acceptance-evidence-v1","<criterion key>","<evidence key>","<source kind>",<provider locator>,"present"|"missing"|"unavailable","<provider-native record identity or sentinel>","<provider revision/content digest or sentinel>"]
+["maestro-acceptance-evidence-binding-v1","<criterion key>","<evidence requirement key>","<source kind>",<approved locator template>,<exact resolved provider locator>,"<binding context revision>","present"|"missing"|"unavailable","<provider-native record identity or sentinel>","<provider revision/content digest or sentinel>"]
 ```
 
-For `present`, both record identity and provider revision or exact content digest
-are required. For `missing` or `unavailable`, use that same state as both
-sentinels and retain the unchanged stable locator. Serialize
-`["maestro-acceptance-evidence-manifest-v1",[<entries sorted by evidence key>]]`
+The binding context revision covers the current Symphony/implementation/PR,
+repository, base, head, merge, and provider-role resolution context. For
+`present`, both record identity and provider revision or exact content digest
+are required. For `missing` or `unavailable`, retain the approved requirement
+key and template, use an explicit `unresolved` token where no runtime value yet
+exists, and use the matching state sentinel for provider identity/revision.
+The resolved locator is the template with `locator-template-v1` replaced by
+`resolved-locator-v1` and every declared token replaced one-for-one in the same
+position; its arity and all static selectors are unchanged.
+`${provider_record_role}` resolves to the contract-declared provider role or
+record class used for matching, while the separate provider-native identity
+field records the matched record ID.
+The observable-state field is finite: only `present`, `missing`, or
+`unavailable` is canonical. Resolution outcome is separately one of `exact`,
+`unresolved`, or `ambiguous`; it never occupies the observable-state field.
+An unresolved token uses a `missing` candidate entry with matching sentinels;
+multiple matches use an `unavailable` candidate entry with matching sentinels.
+An unresolved or ambiguous resolution is non-publishable and cannot enter a
+persisted review request.
+Append `action-failed` under bounded recovery rather than
+persisting `review-requested` or consuming a publication identity. Serialize
+`["maestro-acceptance-evidence-binding-manifest-v1",[<entries sorted by evidence requirement key>]]`
 and digest it as `acceptance-evidence-v1:<lowercase SHA-256 hex>`. Unknown,
 unkeyed, untyped-URL, or free-form missing evidence cannot enter this manifest.
+Resolving the same template to a new issue, PR, base/head, check, comment,
+artifact, manual record, repository file/commit, provider record revision, or
+content digest changes this runtime manifest/review input, never the approved
+contract revision.
 
 ### Review evidence and full context identity
 
@@ -194,8 +227,8 @@ Build one complete required lens/validator evidence manifest. Each required item
 is
 `["lens"|"validator","<stable key>","present"|"missing"|"unavailable","<evidence revision or matching sentinel>"]`;
 never omit an expected item. For each present item, serialize
-`["maestro-review-evidence-v1","<lens|validator>","<stable key>","review-evidence-v1","<review source closure revision>","<acceptance evidence manifest revision>",[<source-closure entries>],[<acceptance-evidence entries>]]`
-and digest it as `review-evidence-v1:<lowercase SHA-256 hex>`. Thus the acceptance evidence manifest is included in `review-evidence-v1`, and both the acceptance evidence manifest and its revision are included in `review-input-v1`.
+`["maestro-review-evidence-v1","<lens|validator>","<stable key>","review-evidence-v1","<review source closure revision>","<acceptance evidence binding manifest revision>",[<source-closure entries>],[<acceptance-evidence binding entries>]]`
+and digest it as `review-evidence-v1:<lowercase SHA-256 hex>`. The acceptance evidence binding manifest is included in `review-evidence-v1`, and both the acceptance evidence binding manifest and its revision are included in `review-input-v1`.
 The fourth item is the fixed literal `review-evidence-v1`.
 
 Each applicable confirmed decision-resolution contributes
@@ -204,7 +237,7 @@ Only an exact pause/revision match is applicable. Canonicalize all ordered sets,
 then serialize the complete input on one fixed field order:
 
 ```text
-["maestro-review-input-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review source closure revision>","<acceptance evidence manifest revision>",[<lens/validator evidence manifest>],[<acceptance-evidence manifest>],[<applicable decision-resolution items>]]
+["maestro-review-input-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review source closure revision>","<acceptance evidence binding manifest revision>",[<lens/validator evidence manifest>],[<acceptance-evidence binding manifest>],[<applicable decision-resolution items>]]
 ```
 
 Digest it as `review-input-v1:<lowercase SHA-256 hex>`. Derive the Review PR
@@ -218,11 +251,35 @@ Derive Linear publication identity from
 `["maestro-review-linear-publication-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review input revision>","<review action identity>","linear-cursor-follow-up"]`
 as `review-linear-publication-v1:<lowercase SHA-256 hex>`.
 
-Before expensive review or either publication, append and confirm
-`review-requested` containing every canonical array/digest and the provider
-records used to derive them. Changed acceptance evidence, provider revision,
-base SHA, or any linked native identity creates a new eligible revision. Records
-from an older revision are historical and neither satisfy nor block it.
+Reconciliation creates the owned exact-head worktree before source closure or `review-requested`.
+It then confirms the PR
+native ID, repository identity, base/head SHAs, governance revisions, and review
+candidate; creates or acquires one owned isolated detached worktree at the exact
+head; verifies containment, ownership metadata, repository identity, and
+`git rev-parse HEAD == <expected head SHA>`; and derives all repository
+policy/config sources from that exact root. Only then may it append and confirm
+`review-requested` containing every canonical array/digest and provider record.
+It dispatches review with that same worktree and explicitly transfers cleanup
+ownership after confirmed dispatch. If dispatch does not occur, reconciliation
+retains ownership and cleans the worktree through the guarded attachment-state
+branch.
+
+Immediately before any GitHub review/comment publication, freshly re-read the
+complete context, re-resolve every evidence requirement template, rederive the
+acceptance-evidence binding manifest, rederive exact-head repository/plugin
+source closure and capability state, rederive applicable decision resolutions,
+and rederive the complete `review-input-v1`. Compare its canonical bytes and
+revision byte-for-byte with the input actually reviewed. Any difference
+publishes neither GitHub nor Linear follow-up, appends one `review-input-stale`
+event containing old and new revisions plus the changed component, cleans the
+owned worktree, and returns the new eligible input to reconciliation. If a fresh
+input cannot be derived, fail closed with `action-failed` and the old revision;
+no publication identity is consumed.
+
+Changed acceptance evidence, provider revision, source/policy bytes, capability,
+decision resolution, base/head SHA, or any linked native identity creates a new
+eligible revision. Records from an older revision are historical and neither
+satisfy nor block it.
 
 Normalize a requested goal with those text rules and case-folding. Serialize the
 control creation tuple as a whitespace-free JSON array whose first item is
@@ -356,6 +413,7 @@ without its real instruction is invalid.
 | `review-requested` | Reconciler after the canonical current review input revision is durably confirmed | Authorizes review and publication for only that exact head and input revision |
 | `review-recorded` | Review skill after its exact-head and exact-input-revision GitHub record is confirmed | Reconciler consumes the current review verdict and next gate |
 | `review-stale-head` | Review skill when the head changes before publication | Discards the result and leaves the new head eligible |
+| `review-input-stale` | Review skill when full pre-publication rederivation differs from the reviewed input | Records old/new revisions, discards the result, and leaves only the new input eligible |
 | `merge-observed` | Reconciler for every confirmed GitHub merge not yet reconciled | Preserves merge identity while keeping “merged” distinct from “merge-reconciled” |
 | `merge-reconciled` | Reconciler only after a complete, evidenced reconciler verdict | Completes only that implementation issue and permits downstream readiness recalculation |
 | `human-decision-required` | Start/review/reconcile when human authority is required | Records prior/resume phase and locks only the affected subgraph |
@@ -407,6 +465,7 @@ No other action outcome is valid.
 | `mutation-ambiguous` | Search by native target and action identity before any retry |
 | `semantic-drift` | Do not retry mutation; require bounded decision or strategic revision |
 | `review-stale-head` | Do not retry the stale identity; create a new identity for the new head |
+| `review-input-stale` | Do not retry or publish the stale result; reconcile the newly derived input |
 | `validation-timeout` | Terminate, clean up, and retry only within the unchanged-state budget |
 | `capability-lost` | Pause dependent operations until capability changes |
 | `cleanup-failed` | Retry only ownership-checked cleanup; blocks Symphony closeout |
@@ -477,6 +536,7 @@ or choice group.
 | `event` | `review-requested` | `both` | `canonical-review-input-revision-is-durably-confirmed` | `review-revision-eligible` | `none` |
 | `event` | `review-recorded` | `both` | `canonical-exact-head-and-input-revision-review-record-is-confirmed` | `review-gate-recorded` | `none` |
 | `event` | `review-stale-head` | `both` | `remote-pr-head-no-longer-matches-reviewed-head` | `review-new-head` | `none` |
+| `event` | `review-input-stale` | `both` | `current-review-input-differs-from-reviewed-input` | `new-review-input-eligible` | `none` |
 | `event` | `merge-observed` | `both` | `github-merge-sha-is-freshly-confirmed` | `merge-reconciliation-pending` | `none` |
 | `event` | `merge-reconciled` | `both` | `merge-reconciliation-is-complete-and-evidenced` | `implementation-complete` | `none` |
 | `event` | `human-decision-required` | `both` | `bounded-or-strategic-human-authority-is-required` | `affected-subgraph-paused` | `none` |
@@ -497,6 +557,7 @@ or choice group.
 | `failure-category` | `mutation-ambiguous` | `both` | `mutation-ambiguous-category-is-evidenced` | `mutation-ambiguous-recovery` | `none` |
 | `failure-category` | `semantic-drift` | `both` | `semantic-drift-category-is-evidenced` | `semantic-drift-recovery` | `none` |
 | `failure-category` | `review-stale-head` | `both` | `review-stale-head-category-is-evidenced` | `review-stale-head-recovery` | `none` |
+| `failure-category` | `review-input-stale` | `both` | `review-input-stale-category-is-evidenced` | `new-review-input-eligible` | `none` |
 | `failure-category` | `validation-timeout` | `both` | `validation-timeout-category-is-evidenced` | `validation-timeout-recovery` | `none` |
 | `failure-category` | `capability-lost` | `both` | `capability-lost-category-is-evidenced` | `capability-lost-recovery` | `none` |
 | `failure-category` | `cleanup-failed` | `both` | `cleanup-failed-category-is-evidenced` | `cleanup-failed-recovery` | `none` |

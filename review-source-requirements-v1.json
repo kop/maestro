@@ -1,0 +1,33 @@
+{
+  "version": "review-source-requirements-v1",
+  "mandatory_plugin_sources": [
+    "review-source-requirements-v1.json",
+    "scripts/review-source-closure.py",
+    "skills/symphony-review/SKILL.md",
+    "references/symphony/core.md",
+    "references/symphony/linear.md",
+    "references/symphony/reconciliation.md",
+    "references/symphony/review.md",
+    "agents/symphony-reviewer.md"
+  ],
+  "skill_dependencies": [
+    "references/symphony/core.md",
+    "references/symphony/linear.md",
+    "references/symphony/reconciliation.md",
+    "references/symphony/review.md"
+  ],
+  "lens_sources": {
+    "maestro:code-reviewer": [
+      "agents/code-reviewer.md"
+    ],
+    "maestro:comment-analyzer": [
+      "agents/comment-analyzer.md"
+    ],
+    "maestro:security-reviewer": [
+      "agents/security-reviewer.md"
+    ],
+    "maestro:test-analyzer": [
+      "agents/test-analyzer.md"
+    ]
+  }
+}

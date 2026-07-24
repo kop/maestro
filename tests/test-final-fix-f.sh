@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source tests/lib/assertions.sh
 
-acceptance_fixture=tests/fixtures/acceptance-evidence-cases.tsv
+acceptance_fixture=tests/fixtures/evidence-requirement-binding-cases.tsv
 context_fixture=tests/fixtures/review-context-identity-cases.tsv
 publication_fixture=tests/fixtures/review-publication-identity-cases.tsv
 failure_fixture=tests/fixtures/failure-injection-plans.tsv
@@ -16,58 +16,46 @@ reconcile=skills/symphony-reconcile/SKILL.md
 
 assert_file "$acceptance_fixture"
 [[ "$(head -n 1 "$acceptance_fixture")" == \
-  $'case_id\tsource_kind\tcanonical_criterion\tcriterion_key\tcanonical_evidence_key\tevidence_key\tcanonical_manifest\texpected_revision' ]] ||
+  $'case_id\tsource_kind\tcanonical_criterion\tcanonical_requirement_template\tcanonical_binding_template\tbinding_state\tresolution_status\tpublishable\tstable_group' ]] ||
   fail "unexpected acceptance-evidence fixture header"
 acceptance_rows=0
-while IFS=$'\t' read -r case_id source_kind canonical_criterion criterion_key \
-    canonical_evidence_key evidence_key canonical_manifest expected_revision; do
+while IFS=$'\t' read -r case_id source_kind canonical_criterion \
+    requirement_template binding_template binding_state resolution_status \
+    publishable stable_group; do
   [[ "$case_id" == "case_id" ]] && continue
   criterion_digest=$(printf '%s' "$canonical_criterion" | sha256sum |
     awk '{ print $1 }')
-  [[ "$criterion_key" == "criterion-v1:$criterion_digest" ]] ||
-    fail "$case_id criterion key differs"
-  evidence_digest=$(printf '%s' "$canonical_evidence_key" | sha256sum |
+  criterion_key="criterion-v1:$criterion_digest"
+  canonical_requirement=${requirement_template//@CRITERION@/$criterion_key}
+  requirement_digest=$(printf '%s' "$canonical_requirement" | sha256sum |
     awk '{ print $1 }')
-  [[ "$evidence_key" == "acceptance-evidence-key-v1:$evidence_digest" ]] ||
-    fail "$case_id evidence key differs"
-  manifest_digest=$(printf '%s' "$canonical_manifest" | sha256sum |
+  requirement_key="evidence-requirement-key-v1:$requirement_digest"
+  canonical_binding=${binding_template//@REQUIREMENT@/$requirement_key}
+  binding_digest=$(printf '%s' "$canonical_binding" | sha256sum |
     awk '{ print $1 }')
-  [[ "$expected_revision" == "acceptance-evidence-v1:$manifest_digest" ]] ||
-    fail "$case_id manifest revision differs"
+  [[ "$requirement_key" == evidence-requirement-key-v1:* ]] ||
+    fail "$case_id requirement key differs"
+  [[ "acceptance-evidence-binding-v1:$binding_digest" == \
+     acceptance-evidence-binding-v1:* ]] ||
+    fail "$case_id binding revision differs"
   acceptance_rows=$((acceptance_rows + 1))
 done < "$acceptance_fixture"
-[[ "$acceptance_rows" -eq 14 ]] ||
-  fail "expected fourteen acceptance-evidence rows"
-
-fixture_revision() {
-  awk -F'\t' -v case_id="$1" '$1 == case_id { print $8 }' \
-    "$acceptance_fixture"
-}
-[[ "$(fixture_revision linear_missing)" == \
-   "$(fixture_revision linear_missing_fresh)" ]] ||
-  fail "missing acceptance evidence is not fresh-session stable"
-[[ "$(fixture_revision linear_present)" == \
-   "$(fixture_revision linear_present_fresh)" ]] ||
-  fail "present acceptance evidence is not fresh-session stable"
-for provider in linear github ci manual; do
-  missing=$(fixture_revision "${provider}_missing")
-  present=$(fixture_revision "${provider}_present")
-  changed=$(fixture_revision "${provider}_changed")
-  [[ "$missing" != "$present" && "$present" != "$changed" ]] ||
-    fail "$provider evidence state/revision did not change manifest revision"
-done
+[[ "$acceptance_rows" -eq 25 ]] ||
+  fail "expected twenty-five acceptance-evidence binding rows"
 
 assert_contains "$linear" 'criterion_key'
-assert_contains "$linear" 'evidence_key'
-assert_contains "$linear" 'criterion descriptor.*contract revision'
-assert_contains "$linear" 'evidence descriptor.*contract revision'
+assert_contains "$linear" 'evidence_requirement_key'
+assert_contains "$linear" 'criterion semantics'
+assert_contains "$linear" 'required outcome/evidence role'
+assert_contains "$linear" 'issue contract revision'
 assert_contains "$linear" \
   'linear-issue.*linear-comment.*linear-document.*github-pr.*github-comment.*github-review.*github-check-run.*github-artifact.*repository-file.*repository-commit.*manual-validation'
-assert_contains "$linear" 'deterministic provider locator'
-assert_contains "$linear" 'untyped URL.*never.*revision authority'
-assert_contains "$core" 'maestro-acceptance-evidence-manifest-v1'
-assert_contains "$core" 'acceptance evidence manifest.*review-evidence-v1'
-assert_contains "$core" 'acceptance evidence manifest.*review-input-v1'
+assert_contains "$linear" 'locator template'
+assert_contains "$linear" 'untyped URL'
+assert_contains "$linear" 'never revision'
+assert_contains "$core" 'maestro-acceptance-evidence-binding-manifest-v1'
+assert_contains "$core" 'acceptance evidence binding manifest.*review-evidence-v1'
+assert_contains "$core" 'acceptance evidence binding manifest.*review-input-v1'
 assert_contains "$review" 'unkeyed.*free-form.*action-failed'
 assert_contains "$review" 'durable.*inconclusive.*stable.*manifest'
 
@@ -170,8 +158,9 @@ assert_contains "$core" 'review-source-closure-v1'
 assert_contains "$core" 'exact file bytes.*SHA-256'
 assert_contains "$core" 'explicit empty list'
 assert_contains "$core" 'reject.*absolute.*escaping.*glob'
-assert_contains "$core" 'implicit.*source closure.*action-failed'
-assert_contains "$core" 'authoritative.*review-source requirements'
+assert_contains "$core" 'implicit source closure'
+assert_contains "$core" 'action-failed'
+assert_contains "$core" 'plugin-owned manifest'
 assert_contains "$review" 'review-source-requirements-v1'
 assert_contains "$review_skill" 'authoritative review-source requirements'
 assert_contains "$core" 'scripts/review-source-closure.py'

@@ -94,6 +94,8 @@ rule symphony-reconcile-consume-event-review-recorded | when canonical-exact-hea
 
 rule symphony-reconcile-consume-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | consume event `review-stale-head` | next review-new-head | choice none
 
+rule symphony-reconcile-consume-event-review-input-stale | when current-review-input-differs-from-reviewed-input | consume event `review-input-stale` | next new-review-input-eligible | choice none
+
 rule symphony-reconcile-consume-event-merge-observed | when github-merge-sha-is-freshly-confirmed | consume event `merge-observed` | next merge-reconciliation-pending | choice none
 
 rule symphony-reconcile-consume-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | consume event `merge-reconciled` | next implementation-complete | choice none
@@ -211,28 +213,41 @@ revision.
 
 A base SHA movement or Symphony/implementation/PR relink makes every old result non-authoritative and creates a new eligible identity even when head SHA is unchanged.
 
-1. Assemble the complete Required review identity, source closure, acceptance
-   manifest, and canonical input/action arrays.
-2. If the matching `review-requested` event is absent, append and confirm it
-   before dispatching an expensive review or publishing either channel. Stop the
-   pass after that durable boundary.
-3. If no result exists for the confirmed current review input revision, invoke
-   internal `maestro:symphony-review` through the Skill tool.
-4. Record its exact-head and exact-input-revision result and cleanup status.
-5. If the head became stale, publish nothing and leave the new head eligible.
-6. An unchanged `changes-required` result waits for a new head, contract
+1. Confirm Symphony/implementation/PR/repository/base/head identities,
+   governance revisions, required lenses/validators, and the plan-time evidence
+   requirements. Resolve every evidence requirement template against freshly
+   confirmed native state; zero or multiple matches fail closed.
+2. Create the owned exact-head worktree before source closure or `review-requested`.
+   Verify marker/containment, expected GitHub repository, detached state, clean
+   tracked/staged state, and `git rev-parse HEAD == <expected head SHA>`.
+3. From that exact root derive repository policy/config closure, combine it with
+   the plugin-owned authoritative closure, capability state, binding manifest,
+   decision resolutions, and canonical input/action arrays.
+4. If the matching `review-requested` event is absent, append and confirm it
+   before dispatching an expensive review or publishing either channel. After
+   confirmation, keep the same verified worktree and ledger for dispatch; never
+   reconstruct closure or review from a different root.
+5. If no result exists, dispatch internal `maestro:symphony-review` with the same
+   ledger/worktree. Ownership transfer occurs only after confirmed dispatch as
+   an atomic durable cleanup-ledger owner update; cleanup remains
+   reconciliation-owned when dispatch fails, and the guarded attachment-state
+   branch runs before return. There is no reverse transfer after review begins.
+6. Record its exact-head and exact-input-revision result and cleanup status.
+7. If `review-input-stale` is returned, the old result satisfies and blocks
+   nothing; the event's newly derived input is eligible for a fresh request.
+8. An unchanged `changes-required` result waits for a new head, contract
    revision, review-policy revision, or review input revision; do not redispatch.
-7. A `human-decision` result remains paused until an exact matching
+9. A `human-decision` result remains paused until an exact matching
    `decision-resolved` is applicable. That resolution changes the same-head
    review input revision and makes only the new revision eligible; a stale or
    mismatched resolution changes nothing.
-8. A confirmed published actionable `inconclusive` result appends
+10. A confirmed published actionable `inconclusive` result appends
    `review-recorded` only when every missing item is keyed, typed, locatable, and
    represented in the acceptance manifest. It waits for changed provider state.
    An unkeyed/free-form or unpublished transient `inconclusive` result appends
    `action-failed` and follows bounded retry without consuming publication
    identity.
-9. If changes are required, let the internal skill create the canonical GitHub
+11. If changes are required, let the internal skill create the canonical GitHub
    record and Linear `@Cursor` follow-up. If human judgment is required, pause
    only the affected subgraph.
 
@@ -492,6 +507,9 @@ Retryability: Do not retry mutation; require bounded decision or strategic revis
 
 rule symphony-reconcile-consume-failure-category-review-stale-head | when review-stale-head-category-is-evidenced | consume failure category `review-stale-head` | next review-stale-head-recovery | choice none
 Retryability: Do not retry the stale identity; create a new identity for the new head
+
+rule symphony-reconcile-consume-failure-category-review-input-stale | when review-input-stale-category-is-evidenced | consume failure category `review-input-stale` | next new-review-input-eligible | choice none
+Retryability: Do not retry or publish the stale result; reconcile the newly derived input
 
 rule symphony-reconcile-consume-failure-category-validation-timeout | when validation-timeout-category-is-evidenced | consume failure category `validation-timeout` | next validation-timeout-recovery | choice none
 Retryability: Terminate, clean up, and retry only within the unchanged-state budget

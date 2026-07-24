@@ -60,6 +60,8 @@ rule symphony-status-consume-event-review-recorded | when canonical-exact-head-a
 
 rule symphony-status-consume-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | consume event `review-stale-head` | next review-new-head | choice none
 
+rule symphony-status-consume-event-review-input-stale | when current-review-input-differs-from-reviewed-input | consume event `review-input-stale` | next new-review-input-eligible | choice none
+
 rule symphony-status-consume-event-merge-observed | when github-merge-sha-is-freshly-confirmed | consume event `merge-observed` | next merge-reconciliation-pending | choice none
 
 rule symphony-status-consume-event-merge-reconciled | when merge-reconciliation-is-complete-and-evidenced | consume event `merge-reconciled` | next implementation-complete | choice none

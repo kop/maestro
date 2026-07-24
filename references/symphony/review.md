@@ -20,9 +20,11 @@ exact PR head SHA
 applicable risk labels
 issue validation commands
 complete required lens/validator evidence manifest
-durably confirmed review-source-requirements-v1 record and revision
+plugin-owned review-source-requirements-v1 exact-byte revision
 review-source-closure-v1 descriptor and revision
-complete acceptance-evidence manifest and revision
+complete plan-time evidence requirements
+complete runtime acceptance-evidence binding manifest and revision
+owned exact-head worktree ledger and confirmed cleanup ownership transfer
 applicable matching decision-resolution identities and governing revisions
 review input revision and confirmed review-requested event identity
 review action identity
@@ -32,10 +34,12 @@ Missing identity makes the review `inconclusive`; it never permits guessing.
 
 Derive the review input revision exactly as the core protocol specifies. Run the
 fixed `review-source-closure-v1` algorithm over only declared exact source paths
-and require exact correspondence with the confirmed source-requirements record.
+and the plugin-owned manifest at its fixed plugin-relative path.
 Use the fully qualified roster agent identifier as a lens stable key, derive
 every validator key from its finite kind and normalized command, and resolve
-exactly one typed manifest entry for every contract `evidence_key`.
+exactly one typed runtime binding for every contract
+`evidence_requirement_key`. Resolve every locator template only from freshly
+confirmed native state; zero or multiple matches are non-publishable.
 The manifest contains every required lens and validator with an explicit
 `present`, `missing`, or `unavailable` state and the matching derived evidence
 revision or the literal `missing`/`unavailable` sentinel. Free-form keys,
@@ -49,23 +53,19 @@ canonical `review-requested` record is confirmed.
 
 ## Owned worktree protocol
 
-When any reviewer must execute commands:
+Reconciliation prepares one owned isolated detached worktree before source
+closure or `review-requested`: it confirms repository/PR/base/head identity,
+creates the ledger/marker, verifies containment and attachment, verifies the
+GitHub repository identity and exact detached HEAD, then derives repository
+closure from that root. Review accepts only that exact ledger entry after a
+confirmed cleanup-ownership transfer. Before any use it revalidates marker,
+repository, `git rev-parse HEAD`, detached state, and clean tracked/staged state.
+If dispatch fails before transfer, reconciliation retains ownership and performs
+guarded cleanup. If dispatch succeeds, review owns cleanup on every exit.
 
-1. Locate or fetch the repository without changing a user branch.
-2. Create a unique directory beneath a dedicated Maestro temporary review root.
-3. Derive its name from sanitized native IDs, never issue or PR titles.
-4. Write an adjacent ownership marker containing Symphony UUID, repository,
-   PR native ID, head SHA, and review action identity. Add the reservation to
-   the cleanup ledger with attachment state `reserved-unattached`.
-5. Resolve canonical paths and verify component-level containment under the root.
-6. Add a detached Git worktree at the exact PR head SHA, then atomically update
-   its cleanup-ledger attachment state to `attached-worktree`.
-7. Run all commands with that worktree as the exact working directory.
-8. Apply an explicit timeout to every command.
-9. Compare tracked and staged changes before and after validation.
-10. Re-read the remote PR head before publishing.
-11. Clean every ledger entry through its attachment-state branch; use Git removal
-    only for `attached-worktree`.
+Run all commands with the transferred worktree as the exact working directory,
+apply explicit timeouts, and compare tracked/staged changes before and after
+validation.
 
 Every cleanup-ledger entry records the repository, canonical owned path, marker,
 expected action identity, and explicit attachment state. Cleanup branches on
@@ -172,9 +172,14 @@ Deduplicate the same underlying problem while preserving corroborating sources.
 Different concerns on the same line remain separate. A required specialist
 `human-decision` or `inconclusive` result prevents a passing aggregate.
 
-Before publication, verify the remote head still equals the reviewed exact PR head
-SHA. If it changed, publish nothing, classify `review-stale-head`, clean up, and
-review the new SHA on a later pass.
+Immediately before publication, freshly rederive the complete review context,
+all evidence-template bindings, acceptance binding manifest, exact-head
+repository/plugin closure, capability state, decision-resolution revision, and
+complete review-input revision. Compare canonical bytes byte-for-byte with the
+reviewed input. Any difference publishes neither GitHub nor Linear follow-up,
+records `review-input-stale` with old/new revisions, cleans up, and makes only
+the new input eligible. An underivable fresh input fails closed with
+`action-failed`.
 
 The attachment-state cleanup branch applies on success, failure, timeout, stale head, reviewer error, and publication failure.
 
@@ -195,9 +200,9 @@ The attachment-state cleanup branch applies on success, failure, timeout, stale 
   and apply `maestro:scope-change` for a strategic contract/DAG revision or
   `maestro:needs-human` for a bounded decision.
 - Inconclusive: a durable `inconclusive` publication requires every verdict-relevant missing item in a stable acceptance manifest.
-  Every item has a criterion/evidence key, finite source kind,
-  deterministic provider locator, and `missing`/`unavailable` manifest entry
-  whose state can later change. A confirmed durable `inconclusive` publication
+  Every item has a criterion/evidence-requirement key, finite source kind,
+  approved locator template, exact runtime binding entry, and
+  `missing`/`unavailable` state whose binding can later change. A confirmed durable `inconclusive` publication
   for the complete context appends `review-recorded`. Any unkeyed or free-form missing evidence is unpublished and appends `action-failed`; bounded recovery applies and no publication identity is consumed.
 
 For changes required, add one Linear issue comment after the canonical GitHub

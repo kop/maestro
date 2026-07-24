@@ -179,7 +179,58 @@ reduce_controller_state() {
     predicate["$key"]=$value
   done
 
-  if [[ "${predicate[surface]:-}" == "review" &&
+  if [[ "${predicate[surface]:-}" == "review-publication" &&
+        "${predicate[fresh_derivation]:-}" == "confirmed" &&
+        "${predicate[reviewed_input]:-}" != "${predicate[fresh_input]:-}" &&
+        "${predicate[worktree]:-}" == "owned" ]]; then
+    emit_action_plan review-input-stale \
+      fresh-review-context,evidence-template-bindings,acceptance-evidence-manifest,review-source-closure,capability-state,decision-resolutions,review-input \
+      cleanup-owned-worktree review-input-stale \
+      github-review-publication,linear-cursor-follow-up,review-recorded,merge-ready \
+      new-review-input-eligible
+  elif [[ "${predicate[surface]:-}" == "review-publication" &&
+          "${predicate[fresh_derivation]:-}" == "failed" &&
+          "${predicate[worktree]:-}" == "owned" ]]; then
+    emit_action_plan observation-incomplete \
+      fresh-review-context,evidence-template-bindings,acceptance-evidence-manifest,review-source-closure,capability-state,decision-resolutions,review-input \
+      cleanup-owned-worktree action-failed \
+      github-review-publication,linear-cursor-follow-up,review-recorded,merge-ready \
+      review-input-derivation-recovery
+  elif [[ "${predicate[surface]:-}" == "review-binding" &&
+          "${predicate[binding_state]:-}" == "unresolved" ]]; then
+    emit_action_plan observation-incomplete \
+      evidence-requirements,fresh-native-state,runtime-bindings \
+      cleanup-owned-worktree action-failed \
+      review-requested,review-publication,review-recorded,merge-ready \
+      evidence-binding-recovery
+  elif [[ "${predicate[surface]:-}" == "review-binding" &&
+          "${predicate[binding_state]:-}" == "ambiguous" ]]; then
+    emit_action_plan mutation-ambiguous \
+      evidence-requirements,fresh-native-state,runtime-bindings \
+      cleanup-owned-worktree action-failed \
+      review-requested,review-publication,review-recorded,merge-ready \
+      evidence-binding-recovery
+  elif [[ "${predicate[surface]:-}" == "review-preparation" &&
+          "${predicate[worktree]:-}" == "verified" &&
+          "${predicate[closure]:-}" == "derived" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[dispatch]:-}" == "failed" &&
+          "${predicate[ownership]:-}" == "reconciler" ]]; then
+    emit_action_plan tool-failed \
+      owned-path,ownership-marker,repository-identity,expected-head,review-source-closure,review-requested \
+      cleanup-owned-worktree action-failed \
+      review-dispatch,review-publication review-dispatch-failure-cleaned
+  elif [[ "${predicate[surface]:-}" == "review-preparation" &&
+          "${predicate[worktree]:-}" == "verified" &&
+          "${predicate[closure]:-}" == "derived" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[dispatch]:-}" == "confirmed" &&
+          "${predicate[ownership]:-}" == "reconciler" ]]; then
+    emit_action_plan none \
+      owned-path,ownership-marker,repository-identity,expected-head,review-source-closure,review-requested \
+      transfer-review-worktree-ownership none \
+      cleanup-owned-worktree,duplicate-dispatch review-dispatched
+  elif [[ "${predicate[surface]:-}" == "review" &&
         "${predicate[missing_evidence]:-}" == "unkeyed" &&
         "${predicate[acceptance_manifest]:-}" == "incomplete" ]]; then
     emit_action_plan observation-incomplete \
