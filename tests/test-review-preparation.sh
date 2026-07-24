@@ -25,6 +25,9 @@ import sys
 
 helper, fixture, tmp_dir = sys.argv[1:]
 tmp_dir = pathlib.Path(tmp_dir)
+sys.path.insert(0, str(pathlib.Path("scripts").resolve()))
+from review_source_policy import SourcePolicyError, load_and_validate_source_policy
+
 plugin_root = tmp_dir / "plugin-root"
 manifest = json.loads(
     pathlib.Path("review-source-requirements-v1.json").read_text(encoding="utf-8")
@@ -129,6 +132,17 @@ def invoke(case_id, value, expect_ok=True, root=plugin_root):
     if not expect_ok:
         return {}
     return dict(line.split("\t", 1) for line in result.stdout.splitlines())
+
+
+def invoke_policy(case_id, root, expect_ok=True):
+    try:
+        load_and_validate_source_policy(root)
+    except SourcePolicyError:
+        if expect_ok:
+            raise SystemExit(f"{case_id}: valid shared source policy rejected")
+        return
+    if not expect_ok:
+        raise SystemExit(f"{case_id}: shared source policy accepted symlink authority")
 
 
 changes = {
@@ -256,6 +270,32 @@ for case_id, mutate in policy_mutations.items():
         encoding="utf-8",
     )
     invoke(f"policy-{case_id}", base, expect_ok=False, root=root)
+
+reviewer_symlink_root = tmp_dir / "reviewer-symlink-root"
+shutil.copytree(plugin_root, reviewer_symlink_root)
+reviewer_path = reviewer_symlink_root / "agents/symphony-reviewer.md"
+reviewer_path.unlink()
+reviewer_path.symlink_to("code-reviewer.md")
+invoke("reviewer-source-symlink", base, expect_ok=False, root=reviewer_symlink_root)
+invoke_policy("reviewer-source-symlink", reviewer_symlink_root, expect_ok=False)
+
+manifest_symlink_root = tmp_dir / "manifest-symlink-root"
+shutil.copytree(plugin_root, manifest_symlink_root)
+manifest_path = manifest_symlink_root / "review-source-requirements-v1.json"
+manifest_target = manifest_symlink_root / "review-source-requirements-real.json"
+manifest_path.rename(manifest_target)
+manifest_path.symlink_to(manifest_target.name)
+invoke("policy-manifest-symlink", base, expect_ok=False, root=manifest_symlink_root)
+invoke_policy("policy-manifest-symlink", manifest_symlink_root, expect_ok=False)
+
+component_symlink_root = tmp_dir / "component-symlink-root"
+shutil.copytree(plugin_root, component_symlink_root)
+references_path = component_symlink_root / "references"
+references_target = component_symlink_root / "authority-references"
+references_path.rename(references_target)
+references_path.symlink_to(references_target.name, target_is_directory=True)
+invoke("policy-path-component-symlink", base, expect_ok=False, root=component_symlink_root)
+invoke_policy("policy-path-component-symlink", component_symlink_root, expect_ok=False)
 PY
 
 pass "pre-worktree review preparation and reservation identity"

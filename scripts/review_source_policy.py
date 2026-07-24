@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -55,17 +55,33 @@ def _exact_string_list(value: Any, expected: tuple[str, ...], field: str) -> Non
         raise SourcePolicyError(f"{field} differs from fixed source policy")
 
 
+def resolve_plugin_source_path(
+    plugin_root: Path,
+    relative_path: str,
+    field: str,
+) -> Path:
+    root = plugin_root.resolve()
+    relative = PurePosixPath(relative_path)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise SourcePolicyError(f"{field} must remain within plugin root")
+    cursor = root
+    for component in relative.parts:
+        cursor /= component
+        if cursor.is_symlink():
+            raise SourcePolicyError(f"{field} must not traverse a symlink")
+    resolved = cursor.resolve(strict=False)
+    try:
+        resolved.relative_to(root)
+    except ValueError as error:
+        raise SourcePolicyError(f"{field} escapes plugin root") from error
+    return resolved
+
+
 def load_and_validate_source_policy(
     plugin_root: Path,
 ) -> tuple[dict[str, Any], str]:
     root = plugin_root.resolve()
-    policy_path = (root / POLICY_PATH).resolve(strict=False)
-    try:
-        policy_path.relative_to(root)
-    except ValueError as error:
-        raise SourcePolicyError("source policy escapes plugin root") from error
-    if policy_path.is_symlink():
-        raise SourcePolicyError("source policy must not be a symlink")
+    policy_path = resolve_plugin_source_path(root, POLICY_PATH, "source policy")
     try:
         policy_bytes = policy_path.read_bytes()
         policy = json.loads(policy_bytes.decode("utf-8"))
@@ -106,6 +122,16 @@ def load_and_validate_source_policy(
         )
     if MANDATORY_REVIEWER not in policy["mandatory_plugin_sources"]:
         raise SourcePolicyError("mandatory Symphony reviewer is absent")
+    fixed_sources = set(MANDATORY_PLUGIN_SOURCES)
+    fixed_sources.update(SKILL_DEPENDENCIES)
+    for lens_sources in LENS_SOURCES.values():
+        fixed_sources.update(lens_sources)
+    for relative_path in sorted(fixed_sources):
+        resolve_plugin_source_path(
+            root,
+            relative_path,
+            f"fixed plugin source {relative_path}",
+        )
     revision = (
         "review-source-requirements-v1:"
         + hashlib.sha256(policy_bytes).hexdigest()

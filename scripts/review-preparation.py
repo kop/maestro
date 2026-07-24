@@ -18,6 +18,7 @@ from review_source_policy import (
     SKILL_DEPENDENCIES,
     SourcePolicyError,
     load_and_validate_source_policy,
+    resolve_plugin_source_path,
 )
 
 TOP_LEVEL_FIELDS = {
@@ -347,12 +348,15 @@ def plugin_source_closure(plugin_root: Path) -> tuple[list[Any], str]:
     entries = []
     for raw_path in sorted(paths):
         relative = safe_repository_path(raw_path, "plugin source path")
-        source = (root / relative).resolve()
         try:
-            source.relative_to(root)
-        except ValueError as error:
-            raise PreparationError("plugin source escapes plugin root") from error
-        if not source.is_file() or source.is_symlink():
+            source = resolve_plugin_source_path(
+                root,
+                relative,
+                f"plugin source {relative}",
+            )
+        except SourcePolicyError as error:
+            raise PreparationError(str(error)) from error
+        if not source.is_file():
             raise PreparationError(f"plugin source is unavailable: {relative}")
         try:
             content_digest = hashlib.sha256(source.read_bytes()).hexdigest()
