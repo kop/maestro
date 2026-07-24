@@ -2,6 +2,7 @@
   "version": "review-source-requirements-v1",
   "mandatory_plugin_sources": [
     "review-source-requirements-v1.json",
+    "scripts/review_source_policy.py",
     "scripts/review-source-closure.py",
     "scripts/review-preparation.py",
     "evidence-source-schema-v1.json",

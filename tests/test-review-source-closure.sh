@@ -8,6 +8,8 @@ helper=scripts/review-source-closure.py
 manifest_name=review-source-requirements-v1.json
 assert_file "$helper"
 assert_executable "$helper"
+assert_file scripts/review_source_policy.py
+assert_contains "$helper" 'from review_source_policy import'
 
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -23,6 +25,7 @@ mkdir -p \
 
 mandatory_sources=(
   review-source-requirements-v1.json
+  scripts/review_source_policy.py
   scripts/review-source-closure.py
   scripts/review-preparation.py
   evidence-source-schema-v1.json
@@ -46,6 +49,7 @@ printf '%s\n' \
   '  "version": "review-source-requirements-v1",' \
   '  "mandatory_plugin_sources": [' \
   '    "review-source-requirements-v1.json",' \
+  '    "scripts/review_source_policy.py",' \
   '    "scripts/review-source-closure.py",' \
   '    "scripts/review-preparation.py",' \
   '    "evidence-source-schema-v1.json",' \
@@ -198,6 +202,47 @@ printf '%s\n' \
   '{"version":"review-source-closure-v1","plugin_sources":["agents/symphony-reviewer.md"],"selected_lenses":[],"repository_sources":[],"policy_sources":[],"implicit_sources_declared":true,"validators":[]}' \
   > "$tmp_dir/minimal.json"
 assert_rejected "$tmp_dir/minimal.json" "caller-authored one-file plugin closure"
+
+cp "$plugin_root/$manifest_name" "$tmp_dir/policy-backup.json"
+for policy_mutation in \
+  mandatory-empty mandatory-reduced mandatory-extra \
+  skills-reduced skills-extra \
+  lenses-reduced lenses-extra lenses-unknown-agent
+do
+  python3 - "$tmp_dir/policy-backup.json" \
+    "$plugin_root/$manifest_name" "$policy_mutation" <<'PY'
+import json
+import pathlib
+import sys
+
+source, destination, mutation = sys.argv[1:]
+policy = json.loads(pathlib.Path(source).read_text(encoding="utf-8"))
+if mutation == "mandatory-empty":
+    policy["mandatory_plugin_sources"] = []
+elif mutation == "mandatory-reduced":
+    policy["mandatory_plugin_sources"].remove("agents/symphony-reviewer.md")
+elif mutation == "mandatory-extra":
+    policy["mandatory_plugin_sources"].append("agents/extra-reviewer.md")
+elif mutation == "skills-reduced":
+    policy["skill_dependencies"].pop()
+elif mutation == "skills-extra":
+    policy["skill_dependencies"].append("references/symphony/extra.md")
+elif mutation == "lenses-reduced":
+    policy["lens_sources"].pop("maestro:test-analyzer")
+elif mutation == "lenses-extra":
+    policy["lens_sources"]["maestro:extra-reviewer"] = ["agents/extra-reviewer.md"]
+elif mutation == "lenses-unknown-agent":
+    policy["lens_sources"]["maestro:code-reviewer"] = ["agents/unknown.md"]
+else:
+    raise SystemExit(f"unknown mutation: {mutation}")
+pathlib.Path(destination).write_text(
+    json.dumps(policy, separators=(",", ":")),
+    encoding="utf-8",
+)
+PY
+  assert_rejected "$tmp_dir/a.json" "closure policy mutation $policy_mutation"
+  cp "$tmp_dir/policy-backup.json" "$plugin_root/$manifest_name"
+done
 
 write_descriptor "$tmp_dir/implicit.json" \
   '["maestro:code-reviewer"]' '["policy/a.md","policy/z.md"]' \

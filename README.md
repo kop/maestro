@@ -89,6 +89,14 @@ Changes-required review is published on GitHub, then linked from one Linear comm
 mentioning `@Cursor`.
 
 PR review is risk-adaptive and exact-head: it always includes the mandatory Symphony-context reviewer, then selects specialized code, test, security, and comment lenses by labels, files, and context.
+Every evidence record is bound through its finite provider-kind governing
+chain. All chains include provider-confirmed
+Symphony→implementation→repository authority; GitHub/repository evidence
+continues through the linked PR and applicable base/head/merge terminal, while
+Linear and durable-manual evidence terminate at their implementation-bound
+record authority. An unconfirmed or relinked terminal record is not publishable.
+Review worktree cleanup is reservation-aware before and after action binding and
+is never authorized by action identity alone.
 
 Repository policy owns merge readiness: zero failing checks, at least one approval
 from a human or bot, addressed review comments/threads, and every remaining
@@ -99,6 +107,11 @@ succeeds with evidence, every approved item is completed or explicitly cancelled
 all merged PRs are merge-reconciled, active managed work and unresolved controller
 debt are clear, and required follow-ups exist. Terminal implementation issues
 alone are not completion.
+
+Post-merge reconciliation stages the exact binding manifest before dispatch,
+requires the reconciler to echo that manifest and map every conclusion to its
+bindings, records `merge-reconciled`, completes/unlocks only the implementation
+issue in a separate transition, and evaluates `symphony-completed` later.
 
 ## Linear conventions
 

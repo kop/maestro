@@ -159,8 +159,13 @@ For every merged PR lacking a confirmed `merge-reconciled` result for its source
    identity/revision/evidence. Any unresolved, ambiguous, missing, unavailable,
    omitted, stale, or mismatched required entry blocks dispatch acceptance and
    makes `complete` impossible.
-3. Dispatch `maestro:implementation-reconciler` with the complete reconciliation
-   envelope and canonical binding manifest/revision.
+3. Derive `reconciliation-input-v1` from the full
+   Symphony/implementation/repository/PR/merge/contract/DAG identity, complete
+   canonical binding manifest, final diff revision, and resolved
+   finding/context revision. Derive `reconcile-action-v1` from that input and
+   manifest revision. Dispatch `maestro:implementation-reconciler` with the
+   complete reconciliation envelope, canonical binding manifest/revision, and
+   both derived identities.
 4. Always recompute the binding manifest before accepting the reconciler result.
    Immediately before acceptance, derive it from
    fresh native state. Require byte equality with the request, exact reconciler identity and request

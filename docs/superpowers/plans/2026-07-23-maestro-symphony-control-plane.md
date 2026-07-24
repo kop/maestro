@@ -342,7 +342,8 @@ Use these stable identities:
 | Create candidate issue | Symphony UUID + DAG revision + approved node key |
 | Delegate issue | Linear issue UUID + contract revision + Cursor integration ID |
 | Review PR | GitHub PR native ID + head SHA + contract revision + review-policy revision |
-| Reconcile merge | Linear issue UUID + merge SHA |
+| Reserve review worktree | Symphony UUID + implementation issue UUID + repository native identity + PR native ID + base/head SHAs + contract/DAG/policy revisions + exact `review-preparation-v1` revision |
+| Reconcile merge | Canonical `reconcile-action-v1` over Symphony UUID + implementation issue UUID + repository native identity + PR native ID + merge SHA + contract revision + approved DAG revision + exact current reconciliation binding manifest revision + `reconciliation-input-v1` revision |
 | Update downstream issue | Downstream UUID + source merge SHA + target contract revision |
 
 Never invent random hashes. Embed the identity in the native action where possible.
@@ -634,15 +635,36 @@ remaining configured gates satisfied. Maestro does not merge.
 Merged does not mean Done. For each new merge:
 
 1. Inspect the final PR, diff, and merge SHA.
-2. Run `implementation-reconciler`.
-3. Append `Actual implementation`, deviations, and acceptance evidence.
-4. Apply bounded updates to undispatched downstream context, proposed approach,
-   validation, and dependency notes.
-5. Propose follow-up issues for discovered work.
-6. Request approval for objective, scope, acceptance-criteria, strategic DAG, or
-   running-work changes.
-7. Record the merge action identity.
-8. Mark complete and recalculate readiness.
+2. Derive the staged binding manifest before reconciler dispatch from fresh
+   provider-confirmed governing context. Require every reconciliation/both
+   requirement to resolve exactly.
+3. Derive `reconciliation-input-v1` from the full
+   Symphony/implementation/repository/PR/merge/contract/DAG identity, complete
+   canonical binding manifest, final diff, and resolved finding/context
+   authority. Derive `reconcile-action-v1` from that input and manifest revision.
+4. Dispatch `implementation-reconciler` with the exact staged manifest, input
+   revision, and action identity.
+5. Recompute the current manifest before acceptance and require byte equality,
+   exact manifest echo and conclusion-to-binding mapping, and the same full
+   reconciler input/action identity.
+6. Persist only an evidenced `complete` result and append `merge-reconciled`.
+7. In a distinct later transition consume confirmed `merge-reconciled`, append
+   implementation evidence, apply bounded downstream/follow-up changes, append
+   `implementation-completed`, complete only the implementation issue, and
+   unlock eligible dependants.
+8. Evaluate whole-Symphony closeout in a third later transition; append
+   `symphony-completed` only after every closeout gate is confirmed.
+
+The required transition order is `merge-reconciled` → `implementation-completed`
+→ later `symphony-completed`; no one step may collapse those entity-scoped
+transitions.
+
+Review validation and recovery use reservation-aware pre-binding and post-binding cleanup.
+Pre-binding deletion requires the exact current
+`review-preparation-v1` reservation plus matching ledger/marker/containment and
+attachment observations. Post-binding deletion additionally requires the
+confirmed reservation-to-action binding and matching bound action state; action
+identity alone never authorizes cleanup.
 
 Local deviations are recorded. Contract deviations update affected undispatched
 work. Scope discoveries propose follow-up work. Strategic deviations pause the
@@ -1269,15 +1291,19 @@ You reconcile one confirmed merge. You must not implement, edit, commit, push,
 merge, mutate Linear/GitHub, or delegate work. Return evidence and proposed
 updates to the main `symphony-reconcile` skill.
 
-Require the Symphony issue, implementation issue and contract revision, approved
-DAG revision, final PR, merge SHA, final diff, resolved Maestro findings, upstream
-issues, downstream issues, and Symphony outcome. Missing merge identity is a hard
-inconclusive result.
+Require the Symphony issue, implementation issue UUID and contract revision,
+repository native identity, approved DAG revision, final PR native identity,
+merge SHA, final diff, resolved Maestro findings, upstream issues, downstream
+issues, Symphony outcome, complete current exact reconciliation binding
+manifest/revision, `reconciliation-input-v1` revision, and
+`reconcile-action-v1` identity. Missing or mismatched identity, input authority,
+manifest entry, or required evidence is a hard inconclusive result.
 
 ## Reconciliation process
 
 1. Describe observable delivered behavior, not merely changed files.
-2. Compare every acceptance criterion with final evidence.
+2. Echo every binding entry/key byte-for-byte and compare every acceptance
+   criterion with only its mapped exact binding evidence.
 3. Compare proposed and actual interfaces, data flow, migration, and operations.
 4. Classify each deviation:
    - `local`: no downstream impact;
@@ -1296,10 +1322,20 @@ Return exactly:
 complete | human-decision | inconclusive
 
 ## Merge identity
+Symphony UUID:
+Repository native identity:
 PR:
+Issue UUID:
 Merge SHA:
 Issue contract revision:
 DAG revision:
+Reconciliation binding manifest revision:
+Reconciliation input revision:
+Reconcile action identity:
+
+## Reconciliation binding manifest
+| Criterion key | Requirement key | Evidence stage | Source kind | Static role | Binding context revision | Resolved locator | Resolution outcome | Observable state | Provider identity | Provider revision | Provider evidence |
+|---|---|---|---|---|---|---|---|---|---|---|---|
 
 ## Delivered outcome
 
@@ -1308,8 +1344,8 @@ DAG revision:
   Evidence:
 
 ## Acceptance criteria
-| Criterion | satisfied | Evidence |
-|---|---|---|
+| Criterion | satisfied | Requirement keys | Exact binding references | Evidence |
+|---|---|---|---|---|
 
 ## Deviations and decisions
 - Classification: local | downstream-plan-change | follow-up-required | strategic
@@ -1317,6 +1353,7 @@ DAG revision:
   Actual:
   Reason:
   Consequence:
+  Requirement keys and exact binding references:
 
 ## Interfaces created or changed
 - Interface:
@@ -2066,14 +2103,22 @@ For each cleanup-ledger entry:
 
 1. Canonicalize paths again.
 2. Verify component-level containment beneath the dedicated root.
-3. Read and match the ownership marker.
-4. Confirm Git worktree metadata matches repository and path.
-5. Remove the expected worktree through Git.
-6. Remove only the now-owned review directory and transient artifacts.
+3. Before action binding, require the exact current
+   `review-worktree-reservation-v1` plus a reservation-matching ledger,
+   reservation-only marker, containment, attachment, and repository state.
+4. After action binding, require that same current reservation, its confirmed
+   one-to-one reservation→action journal binding, and matching bound-action,
+   ledger, marker, containment, attachment, and repository state.
+5. Confirm attached Git worktree metadata matches repository and path; for
+   reserved-unattached state prove checkout and Git metadata are absent.
+6. Remove the expected attached worktree through Git or remove only the exact
+   safe unattached reservation.
+7. Remove only the now-owned review directory and transient artifacts.
 
 Never remove an unmarked, mismatched, or user-created worktree. Journal a
 `cleanup-failed` event once and return the exact owned path for retry when safe
-cleanup cannot complete.
+cleanup cannot complete. Historical reservation or action identity alone never
+authorizes deletion.
 
 Return to `symphony-reconcile`:
 
@@ -2265,13 +2310,18 @@ For every merged PR lacking a confirmed merge action identity:
 
 1. Re-read the final PR and merge SHA.
 2. Resolve every `reconciliation` and `both` evidence requirement from
-   authoritative runtime context and build the canonical exact post-merge
-   binding manifest.
+   provider-confirmed governing context and build the staged canonical exact
+   post-merge binding manifest before dispatch. Derive
+   `reconciliation-input-v1` from the full
+   Symphony/implementation/repository/PR/merge/contract/DAG identity, manifest,
+   final diff, and resolved finding/context authority; derive
+   `reconcile-action-v1` from that input and manifest revision.
 3. Dispatch `maestro:implementation-reconciler` with the complete reconciliation
-   envelope and manifest/revision.
-4. Recompute the manifest before acceptance; validate same request identity,
-   byte equality, every echoed entry/key, and every acceptance/deviation/
-   follow-up conclusion against its exact bindings.
+   envelope, exact manifest/revision, `reconciliation-input-v1`, and
+   `reconcile-action-v1`.
+4. Recompute the manifest and input before acceptance; validate the same full
+   canonical input/action identity, byte equality, every echoed entry/key, and
+   every acceptance/deviation/follow-up conclusion against its exact bindings.
 5. Only an exact, satisfied `complete` result may persist reconciliation and
    append `merge-reconciled`. Unresolved, ambiguous, missing, unavailable,
    omitted, stale, or mismatched required bindings block it.

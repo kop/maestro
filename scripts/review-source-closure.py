@@ -15,6 +15,12 @@ import unicodedata
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from review_source_policy import (
+    LENS_SOURCES,
+    MANDATORY_PLUGIN_SOURCES,
+    SourcePolicyError,
+    load_and_validate_source_policy,
+)
 
 VALIDATOR_KINDS = {
     "issue-validation-command",
@@ -25,32 +31,6 @@ VALIDATOR_KINDS = {
 CAPABILITY_STATES = {"present", "missing", "unavailable"}
 SOURCE_CLOSURE_PHASES = {"pre-review", "pre-publication"}
 GLOB_CHARACTERS = {"*", "?", "["}
-PLUGIN_REQUIREMENTS_PATH = "review-source-requirements-v1.json"
-MANDATORY_PLUGIN_SOURCES = {
-    PLUGIN_REQUIREMENTS_PATH,
-    "scripts/review-source-closure.py",
-    "scripts/review-preparation.py",
-    "evidence-source-schema-v1.json",
-    "scripts/evidence-source-schema.py",
-    "skills/symphony-review/SKILL.md",
-    "references/symphony/core.md",
-    "references/symphony/linear.md",
-    "references/symphony/reconciliation.md",
-    "references/symphony/review.md",
-    "agents/symphony-reviewer.md",
-}
-SKILL_DEPENDENCIES = {
-    "references/symphony/core.md",
-    "references/symphony/linear.md",
-    "references/symphony/reconciliation.md",
-    "references/symphony/review.md",
-}
-LENS_SOURCES = {
-    "maestro:code-reviewer": ["agents/code-reviewer.md"],
-    "maestro:comment-analyzer": ["agents/comment-analyzer.md"],
-    "maestro:security-reviewer": ["agents/security-reviewer.md"],
-    "maestro:test-analyzer": ["agents/test-analyzer.md"],
-}
 
 
 class ClosureError(ValueError):
@@ -168,60 +148,10 @@ def normalized_path_list(values: Any, field: str) -> list[str]:
 
 
 def load_plugin_requirements(plugin_root: Path) -> tuple[Any, str]:
-    manifest_path = resolve_contained(
-        plugin_root, PLUGIN_REQUIREMENTS_PATH, "plugin requirements"
-    )
     try:
-        manifest_bytes = manifest_path.read_bytes()
-        requirements = json.loads(manifest_bytes.decode("utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ClosureError(f"plugin requirements unavailable: {error}") from error
-    if not isinstance(requirements, dict):
-        raise ClosureError("plugin requirements must be an object")
-    require_exact_keys(
-        requirements,
-        {
-            "version",
-            "mandatory_plugin_sources",
-            "skill_dependencies",
-            "lens_sources",
-        },
-        "plugin requirements",
-    )
-    if requirements["version"] != "review-source-requirements-v1":
-        raise ClosureError("plugin requirements version is invalid")
-    mandatory_sources = set(
-        normalized_path_list(
-            requirements["mandatory_plugin_sources"],
-            "plugin requirements.mandatory_plugin_sources",
-        )
-    )
-    if mandatory_sources != MANDATORY_PLUGIN_SOURCES:
-        raise ClosureError("mandatory plugin source closure is incomplete")
-    skill_dependencies = set(
-        normalized_path_list(
-            requirements["skill_dependencies"],
-            "plugin requirements.skill_dependencies",
-        )
-    )
-    if skill_dependencies != SKILL_DEPENDENCIES:
-        raise ClosureError("review skill dependency closure is incomplete")
-    lens_sources = requirements["lens_sources"]
-    if not isinstance(lens_sources, dict):
-        raise ClosureError("plugin requirements.lens_sources must be an object")
-    normalized_lenses = {
-        normalize_text(key, "plugin requirements lens key"): normalized_path_list(
-            value, f"plugin requirements.lens_sources[{key}]"
-        )
-        for key, value in lens_sources.items()
-    }
-    if normalized_lenses != LENS_SOURCES:
-        raise ClosureError("selectable lens mapping is incomplete")
-    requirements_revision = (
-        "review-source-requirements-v1:"
-        + hashlib.sha256(manifest_bytes).hexdigest()
-    )
-    return requirements, requirements_revision
+        return load_and_validate_source_policy(plugin_root)
+    except SourcePolicyError as error:
+        raise ClosureError(str(error)) from error
 
 
 def git_output(repository_root: Path, *arguments: str) -> str:

@@ -24,6 +24,12 @@ BINDING_TOKENS = {
 }
 RESOLUTION_OUTCOMES = {"exact", "unresolved", "ambiguous"}
 OBSERVABLE_STATES = {"present", "missing", "unavailable"}
+PROVIDER_CONFIRMATION_FIELDS = (
+    "provider_state",
+    "provider_record_id",
+    "provider_revision",
+    "provider_evidence",
+)
 RUNTIME_CONTEXT_FIELDS = {
     "symphony",
     "current_implementation_issue",
@@ -55,6 +61,143 @@ SOURCE_KINDS = {
     "repository-file",
     "repository-commit",
     "manual-validation",
+}
+GOVERNING_RELATIONSHIPS = {
+    "symphony-implementation": (
+        "symphony",
+        "current_implementation_issue",
+        "current_implementation_issue",
+        (
+            "literal:authoritative-relationship-v1",
+            "literal:symphony-implementation",
+            "entry:symphony",
+            "entry:current_implementation_issue",
+        ),
+    ),
+    "implementation-repository": (
+        "current_implementation_issue",
+        "repository",
+        "repository",
+        (
+            "literal:authoritative-relationship-v1",
+            "literal:implementation-repository",
+            "entry:current_implementation_issue",
+            "entry:repository",
+        ),
+    ),
+    "implementation-linked-pr": (
+        "repository",
+        "current_linked_pr",
+        "current_linked_pr",
+        (
+            "literal:authoritative-relationship-v1",
+            "literal:implementation-linked-pr",
+            "entry:current_implementation_issue",
+            "entry:repository",
+            "entry:current_linked_pr",
+        ),
+    ),
+    "linked-pr-base": (
+        "current_linked_pr",
+        "current_base",
+        "current_base",
+        (
+            "literal:authoritative-relationship-v1",
+            "literal:linked-pr-base",
+            "entry:repository",
+            "entry:current_linked_pr",
+            "entry:current_base",
+        ),
+    ),
+    "linked-pr-head": (
+        "current_linked_pr",
+        "current_head",
+        "current_head",
+        (
+            "literal:authoritative-relationship-v1",
+            "literal:linked-pr-head",
+            "entry:repository",
+            "entry:current_linked_pr",
+            "entry:current_head",
+        ),
+    ),
+    "linked-pr-merge": (
+        "current_linked_pr",
+        "current_merge",
+        "current_merge",
+        (
+            "literal:authoritative-relationship-v1",
+            "literal:linked-pr-merge",
+            "entry:repository",
+            "entry:current_linked_pr",
+            "entry:current_merge",
+        ),
+    ),
+}
+RUNTIME_RELATIONSHIP_ORDER = tuple(GOVERNING_RELATIONSHIPS)
+CHAIN_BY_TERMINAL = {
+    "current_implementation_issue": (
+        ("symphony", "current_implementation_issue", "repository"),
+        ("symphony-implementation", "implementation-repository"),
+    ),
+    "current_linked_pr": (
+        (
+            "symphony",
+            "current_implementation_issue",
+            "repository",
+            "current_linked_pr",
+        ),
+        (
+            "symphony-implementation",
+            "implementation-repository",
+            "implementation-linked-pr",
+        ),
+    ),
+    "current_base": (
+        (
+            "symphony",
+            "current_implementation_issue",
+            "repository",
+            "current_linked_pr",
+            "current_base",
+        ),
+        (
+            "symphony-implementation",
+            "implementation-repository",
+            "implementation-linked-pr",
+            "linked-pr-base",
+        ),
+    ),
+    "current_head": (
+        (
+            "symphony",
+            "current_implementation_issue",
+            "repository",
+            "current_linked_pr",
+            "current_head",
+        ),
+        (
+            "symphony-implementation",
+            "implementation-repository",
+            "implementation-linked-pr",
+            "linked-pr-head",
+        ),
+    ),
+    "current_merge": (
+        (
+            "symphony",
+            "current_implementation_issue",
+            "repository",
+            "current_linked_pr",
+            "current_merge",
+        ),
+        (
+            "symphony-implementation",
+            "implementation-repository",
+            "implementation-linked-pr",
+            "linked-pr-merge",
+        ),
+    ),
 }
 
 
@@ -115,6 +258,9 @@ def load_schema(plugin_root: Path) -> dict[str, Any]:
             "binding_tokens",
             "resolution_outcomes",
             "observable_states",
+            "provider_confirmation_fields",
+            "governing_context_entries",
+            "governing_relationships",
             "source_kinds",
         },
         "schema",
@@ -129,6 +275,42 @@ def load_schema(plugin_root: Path) -> dict[str, Any]:
         raise SchemaError("schema resolution outcomes are incomplete")
     if set(schema["observable_states"]) != OBSERVABLE_STATES:
         raise SchemaError("schema observable states are incomplete")
+    if schema["provider_confirmation_fields"] != list(PROVIDER_CONFIRMATION_FIELDS):
+        raise SchemaError("schema provider confirmation fields are incomplete")
+    entries = schema["governing_context_entries"]
+    if not isinstance(entries, dict) or set(entries) != RUNTIME_CONTEXT_FIELDS:
+        raise SchemaError("schema governing context entries are incomplete")
+    expected_entry_kinds = {
+        "symphony": "linear-issue",
+        "current_implementation_issue": "linear-issue",
+        "repository": "github-repository",
+        "current_linked_pr": "github-pr",
+        "current_base": "github-commit",
+        "current_head": "github-commit",
+        "current_merge": "github-commit",
+    }
+    for name, provider_kind in expected_entry_kinds.items():
+        exact_keys(entries[name], {"provider_kind"}, f"governing_context_entries.{name}")
+        if entries[name]["provider_kind"] != provider_kind:
+            raise SchemaError(f"governing_context_entries.{name} provider kind differs")
+    relationships = schema["governing_relationships"]
+    if not isinstance(relationships, dict) or set(relationships) != set(
+        GOVERNING_RELATIONSHIPS
+    ):
+        raise SchemaError("schema governing relationships are incomplete")
+    for name, expected in GOVERNING_RELATIONSHIPS.items():
+        definition = exact_keys(
+            relationships[name],
+            {"from_context", "to_context", "governs", "provider_locator_shape"},
+            f"governing_relationships.{name}",
+        )
+        if (
+            definition["from_context"],
+            definition["to_context"],
+            definition["governs"],
+            tuple(definition["provider_locator_shape"]),
+        ) != expected:
+            raise SchemaError(f"governing_relationships.{name} differs")
     if not isinstance(schema["source_kinds"], dict):
         raise SchemaError("schema source_kinds must be an object")
     if set(schema["source_kinds"]) != SOURCE_KINDS:
@@ -147,6 +329,7 @@ def load_schema(plugin_root: Path) -> dict[str, Any]:
                     "provider_record_roles",
                     "locator_template_shape",
                     "provider_locator_shape",
+                    "governing_context",
                 },
                 field,
             )
@@ -175,6 +358,33 @@ def load_schema(plugin_root: Path) -> dict[str, Any]:
                     provider_slot,
                     f"{field}.shape[{position}]",
                 )
+            contract = exact_keys(
+                variant["governing_context"],
+                {"required_entries", "required_relationships", "terminal_context"},
+                f"{field}.governing_context",
+            )
+            terminal = contract["terminal_context"]
+            if terminal not in BINDING_TOKENS:
+                raise SchemaError(f"{field} has an unknown terminal context")
+            expected_entries, expected_edges = CHAIN_BY_TERMINAL[terminal]
+            if contract["required_entries"] != list(expected_entries):
+                raise SchemaError(f"{field} governing entries differ")
+            relationship_contract = contract["required_relationships"]
+            if not isinstance(relationship_contract, list):
+                raise SchemaError(f"{field} governing relationships must be a list")
+            expected_contract = [
+                {"edge": edge, "governs": GOVERNING_RELATIONSHIPS[edge][2]}
+                for edge in expected_edges
+            ]
+            if relationship_contract != expected_contract:
+                raise SchemaError(f"{field} governing relationship chain differs")
+            provider_tokens = {
+                split_slot(slot, f"{field}.provider_locator_shape")[1]
+                for slot in provider_shape
+                if split_slot(slot, f"{field}.provider_locator_shape")[0] == "binding"
+            }
+            if terminal not in provider_tokens:
+                raise SchemaError(f"{field} terminal context is absent from locator")
     return schema
 
 
@@ -472,13 +682,130 @@ def canonical_runtime_context(value: Any) -> dict[str, list[Any]]:
     return canonical
 
 
+def expected_relationship_locator(
+    name: str,
+    context: dict[str, list[Any]],
+) -> list[str]:
+    shape = GOVERNING_RELATIONSHIPS[name][3]
+    locator = []
+    for slot in shape:
+        kind, value = slot.split(":", 1)
+        if kind == "literal":
+            locator.append(value)
+        elif kind == "entry":
+            locator.append(context[value][0])
+        else:
+            raise SchemaError(f"governing relationship {name} shape is invalid")
+    return locator
+
+
+def canonical_relationship_confirmation(
+    name: str,
+    value: Any,
+    context: dict[str, list[Any]],
+    index: int,
+) -> tuple[list[Any], str]:
+    field = f"runtime_relationships.{name}[{index}]"
+    confirmation = exact_keys(
+        value,
+        {
+            "from_context",
+            "to_context",
+            "governs",
+            "provider_locator",
+            "provider_state",
+            "provider_record_id",
+            "provider_revision",
+            "provider_evidence",
+        },
+        field,
+    )
+    source = text(confirmation["from_context"], f"{field}.from_context")
+    target = text(confirmation["to_context"], f"{field}.to_context")
+    governs = text(confirmation["governs"], f"{field}.governs")
+    locator = confirmation["provider_locator"]
+    if not isinstance(locator, list) or not all(
+        isinstance(item, str) and item for item in locator
+    ):
+        raise SchemaError(f"{field}.provider_locator must be a string array")
+    state = text(confirmation["provider_state"], f"{field}.provider_state")
+    if state not in OBSERVABLE_STATES:
+        raise SchemaError(f"{field}.provider_state is not finite")
+    record_id = text(
+        confirmation["provider_record_id"], f"{field}.provider_record_id"
+    )
+    revision = text(
+        confirmation["provider_revision"], f"{field}.provider_revision"
+    )
+    evidence = text(
+        confirmation["provider_evidence"], f"{field}.provider_evidence"
+    )
+    if state == "present":
+        if any(
+            item in OBSERVABLE_STATES | {"unresolved"}
+            for item in (record_id, revision, evidence)
+        ):
+            raise SchemaError(f"{field} lacks provider confirmation")
+    elif (record_id, revision, evidence) != (state, state, state):
+        raise SchemaError(f"{field} state sentinels differ")
+    expected_source, expected_target, expected_governs, _ = (
+        GOVERNING_RELATIONSHIPS[name]
+    )
+    consistent = (
+        source == expected_source
+        and target == expected_target
+        and governs == expected_governs
+        and locator == expected_relationship_locator(name, context)
+    )
+    if state != "present":
+        resolution = "unresolved"
+    elif not consistent:
+        resolution = "ambiguous"
+    else:
+        resolution = "exact"
+    return (
+        [
+            source,
+            target,
+            governs,
+            locator,
+            state,
+            record_id,
+            revision,
+            evidence,
+        ],
+        resolution,
+    )
+
+
+def canonical_runtime_relationships(
+    value: Any,
+    context: dict[str, list[Any]],
+) -> dict[str, list[tuple[list[Any], str]]]:
+    relationships = exact_keys(
+        value,
+        set(GOVERNING_RELATIONSHIPS),
+        "runtime_relationships",
+    )
+    canonical = {}
+    for name in RUNTIME_RELATIONSHIP_ORDER:
+        confirmations = relationships[name]
+        if not isinstance(confirmations, list):
+            raise SchemaError(f"runtime_relationships.{name} must be a list")
+        canonical[name] = [
+            canonical_relationship_confirmation(name, confirmation, context, index)
+            for index, confirmation in enumerate(confirmations)
+        ]
+    return canonical
+
+
 def derive_locator_and_context(
     requirement: list[Any],
     variant: dict[str, Any],
     context: dict[str, list[Any]],
-) -> tuple[list[Any], str, bool]:
+    relationships: dict[str, list[tuple[list[Any], str]]],
+) -> tuple[list[Any], str, str]:
     template = requirement[6]
-    selected = {"symphony": context["symphony"]}
     resolved = []
     for index, (template_slot, provider_slot) in enumerate(
         zip(
@@ -503,15 +830,38 @@ def derive_locator_and_context(
                     raise SchemaError(
                         "requirement repository differs from authoritative context"
                     )
-                selected["repository"] = context["repository"]
             resolved.append(selector)
         elif provider_kind == "binding":
             if template_kind != "token" or template_name != provider_name:
                 raise SchemaError("binding slot differs from template token")
-            selected[str(provider_name)] = context[str(provider_name)]
             resolved.append(context[str(provider_name)][0])
         else:
             raise SchemaError("provider locator shape contains an unknown slot")
+    contract = variant["governing_context"]
+    selected = {
+        field: context[field]
+        for field in contract["required_entries"]
+    }
+    selected_relationships = []
+    relationship_resolution = "exact"
+    for relationship_contract in contract["required_relationships"]:
+        name = relationship_contract["edge"]
+        confirmations = relationships[name]
+        if not confirmations:
+            selected_relationships.append([name, []])
+            if relationship_resolution != "ambiguous":
+                relationship_resolution = "unresolved"
+            continue
+        canonical_confirmations = sorted(
+            (confirmation for confirmation, _ in confirmations),
+            key=canonical_json,
+        )
+        selected_relationships.append([name, canonical_confirmations])
+        outcomes = [outcome for _, outcome in confirmations]
+        if len(confirmations) > 1 or "ambiguous" in outcomes:
+            relationship_resolution = "ambiguous"
+        elif "unresolved" in outcomes and relationship_resolution != "ambiguous":
+            relationship_resolution = "unresolved"
     selected_pairs = [
         [field, selected[field]]
         for field in RUNTIME_CONTEXT_ORDER
@@ -520,15 +870,18 @@ def derive_locator_and_context(
     canonical_context = [
         "maestro-evidence-binding-context-v1",
         selected_pairs,
+        selected_relationships,
     ]
     selected_unresolved = any(
         confirmation[0] == "unresolved" or confirmation[2] != "present"
         for confirmation in selected.values()
     )
+    if selected_unresolved and relationship_resolution != "ambiguous":
+        relationship_resolution = "unresolved"
     return (
         resolved,
         digest("evidence-binding-context-v1", canonical_context),
-        selected_unresolved,
+        relationship_resolution,
     )
 
 
@@ -582,6 +935,7 @@ def canonical_binding(schema: dict[str, Any], value: Any) -> tuple[list[Any], bo
     required_keys = {
         "requirement",
         "runtime_context",
+        "runtime_relationships",
         "provider_query",
         "provider_results",
     }
@@ -592,10 +946,15 @@ def canonical_binding(schema: dict[str, Any], value: Any) -> tuple[list[Any], bo
         schema, binding["requirement"]
     )
     context = canonical_runtime_context(binding["runtime_context"])
-    resolved_locator, context_revision, context_unresolved = derive_locator_and_context(
+    relationships = canonical_runtime_relationships(
+        binding["runtime_relationships"],
+        context,
+    )
+    resolved_locator, context_revision, context_resolution = derive_locator_and_context(
         requirement,
         variant,
         context,
+        relationships,
     )
     query = exact_keys(
         binding["provider_query"],
@@ -614,7 +973,10 @@ def canonical_binding(schema: dict[str, Any], value: Any) -> tuple[list[Any], bo
         canonical_provider_result(result, resolved_locator, index)
         for index, result in enumerate(results)
     ]
-    if token_unresolved or context_unresolved or not canonical_results:
+    if context_resolution == "ambiguous":
+        resolution = "ambiguous"
+        state = record_id = provider_revision = provider_evidence = "unavailable"
+    elif token_unresolved or context_resolution == "unresolved" or not canonical_results:
         resolution = "unresolved"
         state = record_id = provider_revision = provider_evidence = "missing"
     elif len(canonical_results) > 1:

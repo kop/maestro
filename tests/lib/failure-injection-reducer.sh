@@ -13,25 +13,6 @@ emit_action_plan() {
   printf 'next_state_verdict\t%s\n' "$next"
 }
 
-bound_attached_cleanup_is_safe() {
-  [[ "$1" == "proved" &&
-     "$2" == "match" &&
-     "$3" == "match" &&
-     "$4" == "attached-worktree" &&
-     "$5" == "match" &&
-     "$6" == "expected" ]]
-}
-
-bound_unattached_cleanup_is_safe() {
-  [[ "$1" == "proved" &&
-     "$2" == "match" &&
-     "$3" == "match" &&
-     "$4" == "reserved-unattached" &&
-     "$5" == "absent" &&
-     "$6" == "absent" &&
-     "$7" == "expected" ]]
-}
-
 reservation_attached_cleanup_is_safe() {
   [[ "$1" == "proved" &&
      "$2" == "current-confirmed" &&
@@ -124,21 +105,21 @@ emit_validation_timeout_plan() {
 
   case "$cleanup_kind" in
     attached)
-      reads=command-process,cleanup-ledger,owned-path,canonical-path,ownership-marker,attachment-state,git-worktree-metadata,directory-contents
+      reads=command-process,review-worktree-reservation,review-action-binding,cleanup-ledger,owned-path,canonical-path,ownership-marker,attachment-state,git-worktree-metadata,directory-contents
       mutations=terminate-command,git-worktree-remove,filesystem-remove-transients
       events=action-failed
       suppressed=review-publication
       next=inconclusive-cleanup-complete
       ;;
     unattached)
-      reads=command-process,cleanup-ledger,owned-path,canonical-path,ownership-marker,attachment-state,repository-metadata,directory-contents
+      reads=command-process,review-worktree-reservation,review-action-binding,cleanup-ledger,owned-path,canonical-path,ownership-marker,attachment-state,repository-metadata,directory-contents
       mutations=terminate-command,filesystem-remove-reservation
       events=action-failed
       suppressed=review-publication,git-worktree-remove
       next=inconclusive-cleanup-complete
       ;;
     *)
-      reads=command-process,cleanup-ledger,owned-path,canonical-path,ownership-marker,attachment-state,repository-metadata,directory-contents
+      reads=command-process,review-worktree-reservation,review-action-binding,cleanup-ledger,owned-path,canonical-path,ownership-marker,attachment-state,repository-metadata,directory-contents
       mutations=terminate-command
       events=action-failed,cleanup-failed
       suppressed=review-publication,filesystem-delete,git-worktree-remove
@@ -619,16 +600,37 @@ reduce_controller_state() {
       bounded-pause-restored
   elif [[ "${predicate[surface]:-}" == "validation" &&
         "${predicate[command]:-}" == "timed-out" ]]; then
-    if [[ "${predicate[owned_path]:-}" == "known" ]] &&
-       bound_attached_cleanup_is_safe \
-         "${predicate[containment]:-}" "${predicate[marker]:-}" \
-         "${predicate[action_identity]:-}" "${predicate[attachment]:-}" \
-         "${predicate[git_metadata]:-}" "${predicate[contents]:-}"; then
+    if [[ "${predicate[owned_path]:-}" == "known" &&
+          "${predicate[binding]:-}" == "absent" ]] &&
+       reservation_attached_cleanup_is_safe \
+         "${predicate[containment]:-}" "${predicate[reservation]:-}" \
+         "${predicate[ledger]:-}" "${predicate[marker]:-}" \
+         "${predicate[attachment]:-}" "${predicate[git_metadata]:-}" \
+         "${predicate[contents]:-}"; then
       cleanup_kind=attached
-    elif [[ "${predicate[owned_path]:-}" == "known" ]] &&
-         bound_unattached_cleanup_is_safe \
-           "${predicate[containment]:-}" "${predicate[marker]:-}" \
-           "${predicate[action_identity]:-}" "${predicate[attachment]:-}" \
+    elif [[ "${predicate[owned_path]:-}" == "known" &&
+            "${predicate[binding]:-}" == "absent" ]] &&
+         reservation_unattached_cleanup_is_safe \
+           "${predicate[containment]:-}" "${predicate[reservation]:-}" \
+           "${predicate[ledger]:-}" "${predicate[marker]:-}" \
+           "${predicate[attachment]:-}" \
+           "${predicate[git_metadata]:-}" "${predicate[checkout]:-}" \
+           "${predicate[contents]:-}"; then
+      cleanup_kind=unattached
+    elif [[ "${predicate[owned_path]:-}" == "known" &&
+            "${predicate[binding]:-}" == "confirmed-one-to-one" ]] &&
+         bound_review_attached_cleanup_is_safe \
+           "${predicate[containment]:-}" "${predicate[reservation]:-}" \
+           "${predicate[ledger]:-}" "${predicate[marker]:-}" \
+           "${predicate[bound_action]:-}" "${predicate[attachment]:-}" \
+           "${predicate[git_metadata]:-}" "${predicate[contents]:-}"; then
+      cleanup_kind=attached
+    elif [[ "${predicate[owned_path]:-}" == "known" &&
+            "${predicate[binding]:-}" == "confirmed-one-to-one" ]] &&
+         bound_review_unattached_cleanup_is_safe \
+           "${predicate[containment]:-}" "${predicate[reservation]:-}" \
+           "${predicate[ledger]:-}" "${predicate[marker]:-}" \
+           "${predicate[bound_action]:-}" "${predicate[attachment]:-}" \
            "${predicate[git_metadata]:-}" "${predicate[checkout]:-}" \
            "${predicate[contents]:-}"; then
       cleanup_kind=unattached

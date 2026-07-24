@@ -115,6 +115,64 @@ def confirmed_context(values):
     }
 
 
+def confirmed_relationships(values):
+    relationships = {
+        "symphony-implementation": (
+            "symphony",
+            "current_implementation_issue",
+            "current_implementation_issue",
+            [values["symphony"], values["current_implementation_issue"]],
+        ),
+        "implementation-repository": (
+            "current_implementation_issue",
+            "repository",
+            "repository",
+            [values["current_implementation_issue"], values["repository"]],
+        ),
+        "implementation-linked-pr": (
+            "repository",
+            "current_linked_pr",
+            "current_linked_pr",
+            [
+                values["current_implementation_issue"],
+                values["repository"],
+                values["current_linked_pr"],
+            ],
+        ),
+        "linked-pr-base": (
+            "current_linked_pr",
+            "current_base",
+            "current_base",
+            [values["repository"], values["current_linked_pr"], values["current_base"]],
+        ),
+        "linked-pr-head": (
+            "current_linked_pr",
+            "current_head",
+            "current_head",
+            [values["repository"], values["current_linked_pr"], values["current_head"]],
+        ),
+        "linked-pr-merge": (
+            "current_linked_pr",
+            "current_merge",
+            "current_merge",
+            [values["repository"], values["current_linked_pr"], values["current_merge"]],
+        ),
+    }
+    return {
+        name: [{
+            "from_context": source,
+            "to_context": target,
+            "governs": governs,
+            "provider_locator": ["authoritative-relationship-v1", name, *identities],
+            "provider_state": "present",
+            "provider_record_id": f"relationship-record:{name}",
+            "provider_revision": f"relationship-revision:{name}",
+            "provider_evidence": f"relationship-evidence:{name}",
+        }]
+        for name, (source, target, governs, identities) in relationships.items()
+    }
+
+
 def invoke(mode, value, expect_ok=True):
     path = tmp_dir / f"input-{invoke.counter}.json"
     invoke.counter += 1
@@ -151,11 +209,13 @@ def requirement(stage, kind, role, locator, criterion="criterion-v1:criterion"):
 
 
 def binding(req, resolved, runtime_context=None, results=None, assertions=None):
-    runtime_context = confirmed_context(runtime_context or context)
+    runtime_values = runtime_context or context
+    runtime_context = confirmed_context(runtime_values)
     resolved = copy.deepcopy(resolved)
     result = {
         "requirement": req,
         "runtime_context": runtime_context,
+        "runtime_relationships": confirmed_relationships(runtime_values),
         "provider_query": {"resolved_locator": resolved},
         "provider_results": results
         if results is not None

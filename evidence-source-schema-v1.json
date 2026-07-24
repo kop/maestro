@@ -22,6 +22,59 @@
     "missing",
     "unavailable"
   ],
+  "provider_confirmation_fields": [
+    "provider_state",
+    "provider_record_id",
+    "provider_revision",
+    "provider_evidence"
+  ],
+  "governing_context_entries": {
+    "symphony": {"provider_kind": "linear-issue"},
+    "current_implementation_issue": {"provider_kind": "linear-issue"},
+    "repository": {"provider_kind": "github-repository"},
+    "current_linked_pr": {"provider_kind": "github-pr"},
+    "current_base": {"provider_kind": "github-commit"},
+    "current_head": {"provider_kind": "github-commit"},
+    "current_merge": {"provider_kind": "github-commit"}
+  },
+  "governing_relationships": {
+    "symphony-implementation": {
+      "from_context": "symphony",
+      "to_context": "current_implementation_issue",
+      "governs": "current_implementation_issue",
+      "provider_locator_shape": ["literal:authoritative-relationship-v1", "literal:symphony-implementation", "entry:symphony", "entry:current_implementation_issue"]
+    },
+    "implementation-repository": {
+      "from_context": "current_implementation_issue",
+      "to_context": "repository",
+      "governs": "repository",
+      "provider_locator_shape": ["literal:authoritative-relationship-v1", "literal:implementation-repository", "entry:current_implementation_issue", "entry:repository"]
+    },
+    "implementation-linked-pr": {
+      "from_context": "repository",
+      "to_context": "current_linked_pr",
+      "governs": "current_linked_pr",
+      "provider_locator_shape": ["literal:authoritative-relationship-v1", "literal:implementation-linked-pr", "entry:current_implementation_issue", "entry:repository", "entry:current_linked_pr"]
+    },
+    "linked-pr-base": {
+      "from_context": "current_linked_pr",
+      "to_context": "current_base",
+      "governs": "current_base",
+      "provider_locator_shape": ["literal:authoritative-relationship-v1", "literal:linked-pr-base", "entry:repository", "entry:current_linked_pr", "entry:current_base"]
+    },
+    "linked-pr-head": {
+      "from_context": "current_linked_pr",
+      "to_context": "current_head",
+      "governs": "current_head",
+      "provider_locator_shape": ["literal:authoritative-relationship-v1", "literal:linked-pr-head", "entry:repository", "entry:current_linked_pr", "entry:current_head"]
+    },
+    "linked-pr-merge": {
+      "from_context": "current_linked_pr",
+      "to_context": "current_merge",
+      "governs": "current_merge",
+      "provider_locator_shape": ["literal:authoritative-relationship-v1", "literal:linked-pr-merge", "entry:repository", "entry:current_linked_pr", "entry:current_merge"]
+    }
+  },
   "source_kinds": {
     "linear-issue": {
       "variants": [
@@ -29,7 +82,12 @@
           "stages": ["review", "reconciliation", "both"],
           "provider_record_roles": ["implementation-issue"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:linear-issue", "token:current_implementation_issue", "role", "selector:section"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:linear-issue", "binding:current_implementation_issue", "role", "selector:section"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:linear-issue", "binding:current_implementation_issue", "role", "selector:section"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}],
+            "terminal_context": "current_implementation_issue"
+          }
         }
       ]
     },
@@ -39,7 +97,12 @@
           "stages": ["review", "reconciliation", "both"],
           "provider_record_roles": ["acceptance-comment"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:linear-comment", "token:current_implementation_issue", "role", "selector:record_marker"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:linear-comment", "binding:current_implementation_issue", "role", "selector:record_marker"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:linear-comment", "binding:current_implementation_issue", "role", "selector:record_marker"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}],
+            "terminal_context": "current_implementation_issue"
+          }
         }
       ]
     },
@@ -49,7 +112,12 @@
           "stages": ["review", "reconciliation", "both"],
           "provider_record_roles": ["design-document"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:linear-document", "token:current_implementation_issue", "role", "selector:section"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:linear-document", "binding:current_implementation_issue", "role", "selector:section"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:linear-document", "binding:current_implementation_issue", "role", "selector:section"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}],
+            "terminal_context": "current_implementation_issue"
+          }
         }
       ]
     },
@@ -59,13 +127,23 @@
           "stages": ["review", "reconciliation", "both"],
           "provider_record_roles": ["linked-pr"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:github-pr", "selector:repository", "token:current_linked_pr", "role", "selector:field"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-pr", "selector:repository", "binding:current_linked_pr", "role", "selector:field"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-pr", "selector:repository", "binding:current_linked_pr", "role", "selector:field"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository", "current_linked_pr"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}, {"edge": "implementation-linked-pr", "governs": "current_linked_pr"}],
+            "terminal_context": "current_linked_pr"
+          }
         },
         {
           "stages": ["review", "both"],
           "provider_record_roles": ["linked-pr-base"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:github-pr", "selector:repository", "token:current_linked_pr", "role", "selector:field", "token:current_base"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-pr", "selector:repository", "binding:current_linked_pr", "role", "selector:field", "binding:current_base"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-pr", "selector:repository", "binding:current_linked_pr", "role", "selector:field", "binding:current_base"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository", "current_linked_pr", "current_base"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}, {"edge": "implementation-linked-pr", "governs": "current_linked_pr"}, {"edge": "linked-pr-base", "governs": "current_base"}],
+            "terminal_context": "current_base"
+          }
         }
       ]
     },
@@ -75,7 +153,12 @@
           "stages": ["review", "reconciliation", "both"],
           "provider_record_roles": ["acceptance-comment"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:github-comment", "selector:repository", "token:current_linked_pr", "role", "selector:record_marker"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-comment", "selector:repository", "binding:current_linked_pr", "role", "selector:record_marker"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-comment", "selector:repository", "binding:current_linked_pr", "role", "selector:record_marker"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository", "current_linked_pr"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}, {"edge": "implementation-linked-pr", "governs": "current_linked_pr"}],
+            "terminal_context": "current_linked_pr"
+          }
         }
       ]
     },
@@ -85,7 +168,12 @@
           "stages": ["review", "reconciliation", "both"],
           "provider_record_roles": ["required-review"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:github-review", "selector:repository", "token:current_linked_pr", "role", "selector:record_marker"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-review", "selector:repository", "binding:current_linked_pr", "role", "selector:record_marker"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-review", "selector:repository", "binding:current_linked_pr", "role", "selector:record_marker"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository", "current_linked_pr"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}, {"edge": "implementation-linked-pr", "governs": "current_linked_pr"}],
+            "terminal_context": "current_linked_pr"
+          }
         }
       ]
     },
@@ -95,7 +183,12 @@
           "stages": ["review", "reconciliation", "both"],
           "provider_record_roles": ["integration-check"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:github-check-run", "selector:repository", "token:current_head", "role", "selector:check_name"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-check-run", "selector:repository", "binding:current_head", "role", "selector:check_name"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-check-run", "selector:repository", "binding:current_head", "role", "selector:check_name"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository", "current_linked_pr", "current_head"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}, {"edge": "implementation-linked-pr", "governs": "current_linked_pr"}, {"edge": "linked-pr-head", "governs": "current_head"}],
+            "terminal_context": "current_head"
+          }
         }
       ]
     },
@@ -105,7 +198,12 @@
           "stages": ["review", "reconciliation", "both"],
           "provider_record_roles": ["integration-artifact"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:github-artifact", "selector:repository", "token:current_head", "role", "selector:workflow_name", "selector:artifact_name"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-artifact", "selector:repository", "binding:current_head", "role", "selector:workflow_name", "selector:artifact_name"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-artifact", "selector:repository", "binding:current_head", "role", "selector:workflow_name", "selector:artifact_name"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository", "current_linked_pr", "current_head"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}, {"edge": "implementation-linked-pr", "governs": "current_linked_pr"}, {"edge": "linked-pr-head", "governs": "current_head"}],
+            "terminal_context": "current_head"
+          }
         }
       ]
     },
@@ -115,7 +213,12 @@
           "stages": ["review", "reconciliation", "both"],
           "provider_record_roles": ["compatibility-report"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:repository-file", "selector:repository", "token:current_head", "role", "selector:repository_path"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:repository-file", "selector:repository", "binding:current_head", "role", "selector:repository_path"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:repository-file", "selector:repository", "binding:current_head", "role", "selector:repository_path"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository", "current_linked_pr", "current_head"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}, {"edge": "implementation-linked-pr", "governs": "current_linked_pr"}, {"edge": "linked-pr-head", "governs": "current_head"}],
+            "terminal_context": "current_head"
+          }
         }
       ]
     },
@@ -125,13 +228,23 @@
           "stages": ["review"],
           "provider_record_roles": ["reviewed-head"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:repository-commit", "selector:repository", "token:current_head", "role"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:repository-commit", "selector:repository", "binding:current_head", "role"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:repository-commit", "selector:repository", "binding:current_head", "role"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository", "current_linked_pr", "current_head"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}, {"edge": "implementation-linked-pr", "governs": "current_linked_pr"}, {"edge": "linked-pr-head", "governs": "current_head"}],
+            "terminal_context": "current_head"
+          }
         },
         {
           "stages": ["reconciliation"],
           "provider_record_roles": ["implementation-merge"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:repository-commit", "selector:repository", "token:current_merge", "role"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:repository-commit", "selector:repository", "binding:current_merge", "role"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:repository-commit", "selector:repository", "binding:current_merge", "role"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository", "current_linked_pr", "current_merge"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}, {"edge": "implementation-linked-pr", "governs": "current_linked_pr"}, {"edge": "linked-pr-merge", "governs": "current_merge"}],
+            "terminal_context": "current_merge"
+          }
         }
       ]
     },
@@ -141,7 +254,12 @@
           "stages": ["review", "reconciliation", "both"],
           "provider_record_roles": ["manual-record"],
           "locator_template_shape": ["literal:locator-template-v1", "literal:manual-validation", "token:current_implementation_issue", "role", "selector:record_marker"],
-          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:manual-validation", "binding:current_implementation_issue", "role", "selector:record_marker"]
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:manual-validation", "binding:current_implementation_issue", "role", "selector:record_marker"],
+          "governing_context": {
+            "required_entries": ["symphony", "current_implementation_issue", "repository"],
+            "required_relationships": [{"edge": "symphony-implementation", "governs": "current_implementation_issue"}, {"edge": "implementation-repository", "governs": "repository"}],
+            "terminal_context": "current_implementation_issue"
+          }
         }
       ]
     }

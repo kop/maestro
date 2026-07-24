@@ -109,7 +109,16 @@ Select every merged PR whose source issue/merge SHA lacks a confirmed
 `merge-reconciled` result. If `merge-observed` is absent, append it so the
 confirmed GitHub merge is never forgotten; if it already exists, consume it and
 continue reconciliation. The observation event never suppresses the later
-reconciliation attempt. Then:
+reconciliation attempt.
+
+Derive the staged binding manifest before dispatch from fresh
+provider-confirmed governing context. Canonicalize
+`["maestro-reconciliation-input-v1","<Symphony UUID>","<implementation issue UUID>","<repository native identity>","<PR native ID>","<merge SHA>","<contract revision>","<approved DAG revision>",<complete canonical reconciliation binding manifest>,"<final diff revision>","<resolved finding/context revision>"]`
+as `reconciliation-input-v1:<lowercase SHA-256 hex>`. Canonicalize
+`["maestro-reconcile-action-v1","<Symphony UUID>","<implementation issue UUID>","<repository native identity>","<PR native ID>","<merge SHA>","<contract revision>","<approved DAG revision>","<reconciliation binding manifest revision>","<reconciliation-input-v1 revision>"]`
+as `reconcile-action-v1:<lowercase SHA-256 hex>`. This full identity, rather
+than issue UUID plus merge SHA, is the only current reconciliation action
+authority. Then:
 
 1. Inspect the final PR, diff, and merge SHA.
 2. Resolve exactly the evidence requirements whose `evidence_stage` is
@@ -122,13 +131,16 @@ reconciliation attempt. Then:
    provider role, oracle-derived binding-context revision and resolved locator,
    resolution outcome, observable state, and provider identity, revision, and
    evidence.
-3. Run `implementation-reconciler` with that complete canonical manifest and
-   its digest in the request identity.
+3. Run `implementation-reconciler` with that complete canonical manifest,
+   `reconciliation-input-v1`, and `reconcile-action-v1` in the request identity.
 4. Recompute the authoritative runtime context and canonical reconciliation
    binding manifest before accepting the response. Require byte-for-byte
-   equality with the dispatched manifest, then validate the reconciler identity
-   against the implementation issue UUID, contract revision, approved DAG
-   revision, PR, merge SHA, and manifest revision. Require its echoed table to
+   equality with the dispatched manifest, then validate the byte-for-byte manifest echo,
+   exact conclusion-to-binding mapping, and the full canonical reconciler identity
+   against the Symphony UUID, implementation issue UUID, repository
+   native identity, PR native ID, merge SHA, contract revision, approved DAG
+   revision, exact current manifest revision, `reconciliation-input-v1`
+   revision, and `reconcile-action-v1` identity. Require its echoed table to
    repeat every entry/key and map every acceptance, deviation, and follow-up
    conclusion to those exact bindings; this is the complete acceptance-evidence table.
 5. Follow the verdict transition below.

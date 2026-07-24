@@ -12,6 +12,13 @@ import unicodedata
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from review_source_policy import (
+    LENS_SOURCES,
+    MANDATORY_PLUGIN_SOURCES,
+    SKILL_DEPENDENCIES,
+    SourcePolicyError,
+    load_and_validate_source_policy,
+)
 
 TOP_LEVEL_FIELDS = {
     "review_identity",
@@ -329,31 +336,14 @@ def canonical_repository_requirements(value: Any) -> list[list[Any]]:
 
 def plugin_source_closure(plugin_root: Path) -> tuple[list[Any], str]:
     root = plugin_root.resolve()
-    manifest_path = root / "review-source-requirements-v1.json"
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise PreparationError(f"plugin source manifest unavailable: {error}") from error
-    exact_object(
-        manifest,
-        {"version", "mandatory_plugin_sources", "skill_dependencies", "lens_sources"},
-        "plugin source manifest",
-    )
-    if manifest["version"] != "review-source-requirements-v1":
-        raise PreparationError("plugin source manifest version differs")
-    paths = set(canonical_string_list(
-        manifest["mandatory_plugin_sources"],
-        "mandatory_plugin_sources",
-    ))
-    paths.update(canonical_string_list(
-        manifest["skill_dependencies"],
-        "skill_dependencies",
-    ))
-    if not isinstance(manifest["lens_sources"], dict):
-        raise PreparationError("lens_sources must be an object")
-    for lens, lens_paths in manifest["lens_sources"].items():
-        text(lens, "lens_sources key")
-        paths.update(canonical_string_list(lens_paths, f"lens_sources.{lens}"))
+        load_and_validate_source_policy(root)
+    except SourcePolicyError as error:
+        raise PreparationError(str(error)) from error
+    paths = set(MANDATORY_PLUGIN_SOURCES)
+    paths.update(SKILL_DEPENDENCIES)
+    for lens_paths in LENS_SOURCES.values():
+        paths.update(lens_paths)
     entries = []
     for raw_path in sorted(paths):
         relative = safe_repository_path(raw_path, "plugin source path")

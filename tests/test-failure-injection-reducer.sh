@@ -137,7 +137,7 @@ unconfirmed_exhaustion_change=$(reduce_controller_state \
 for unsafe_timeout_state in \
   'surface=validation;command=timed-out;owned_path=known;cleanup_state=missing' \
   'surface=validation;command=timed-out;owned_path=known;containment=proved;marker=mismatch;attachment=attached-worktree;git_metadata=match;contents=expected' \
-  'surface=validation;command=timed-out;owned_path=known;containment=proved;marker=match;action_identity=match;attachment=ambiguous;contents=expected'
+  'surface=validation;command=timed-out;owned_path=known;containment=proved;binding=confirmed-one-to-one;reservation=current-confirmed;ledger=reservation-action-match;marker=bound-match;bound_action=current-match;attachment=ambiguous;contents=expected'
 do
   unsafe_timeout=$(reduce_controller_state "$unsafe_timeout_state")
   [[ "$unsafe_timeout" == *$'category\tvalidation-timeout'* &&
@@ -148,8 +148,19 @@ do
     fail "unsafe timeout authorized cleanup or lost cleanup debt"
 done
 
+for reservation_unsafe_timeout in \
+  'surface=validation;command=timed-out;owned_path=known;binding=confirmed-one-to-one;reservation=historical;ledger=reservation-action-match;marker=match;action_identity=match;bound_action=current-match;containment=proved;attachment=attached-worktree;git_metadata=match;contents=expected' \
+  'surface=validation;command=timed-out;owned_path=known;binding=confirmed-one-to-one;reservation=current-confirmed;ledger=mismatch;marker=match;action_identity=match;bound_action=current-match;containment=proved;attachment=attached-worktree;git_metadata=match;contents=expected' \
+  'surface=validation;command=timed-out;owned_path=known;binding=confirmed-one-to-one;reservation=current-confirmed;ledger=reservation-action-match;marker=match;action_identity=match;bound_action=current-match;containment=proved;attachment=attached-worktree;git_metadata=match;contents=expected'
+do
+  reservation_unsafe=$(reduce_controller_state "$reservation_unsafe_timeout")
+  [[ "$reservation_unsafe" == *$'allowed_mutations\tterminate-command'* &&
+     "$reservation_unsafe" == *$'suppressed_actions\treview-publication,filesystem-delete,git-worktree-remove'* ]] ||
+    fail "historical/mismatched reservation authority authorized timeout cleanup"
+done
+
 unexpected_contents=$(reduce_controller_state \
-  'surface=cleanup;containment=proved;marker=match;action_identity=match;attachment=attached-worktree;git_metadata=match;contents=unexpected')
+  'surface=cleanup;containment=proved;binding=confirmed-one-to-one;reservation=current-confirmed;ledger=reservation-action-match;marker=bound-match;bound_action=current-match;attachment=attached-worktree;git_metadata=match;contents=unexpected')
 [[ "$unexpected_contents" == *$'required_reads\tcanonical-path,ownership-marker,attachment-state,repository-metadata,directory-contents'* &&
    "$unexpected_contents" == *$'allowed_mutations\tnone'* ]] ||
   fail "unexpected attached contents did not suppress deletion"
@@ -209,7 +220,7 @@ shortcut_closeout=$(reduce_controller_state \
   fail "stage lifecycle bypassed evidenced reconciliation/closeout gates"
 
 combined_timeout=$(reduce_controller_state \
-  'surface=validation;command=timed-out;owned_path=known;containment=proved;marker=match;action_identity=match;attachment=attached-worktree;git_metadata=match;contents=expected;attempts=exhausted;state_changed=false;exhaustion_event=absent;entity_uuid=issue-validation-attached;retry_action_identity=validation-action-attached;failure_category=validation-timeout;prior_phase=entity-executing;pause_resume_phase=entity-executing;pause_identity=retry-pause-v1:c34493f991967f277e52a49218b9f70d9317932a4b6e3428de48e26eea3efb3e')
+  'surface=validation;command=timed-out;owned_path=known;containment=proved;binding=confirmed-one-to-one;reservation=current-confirmed;ledger=reservation-action-match;marker=bound-match;bound_action=current-match;attachment=attached-worktree;git_metadata=match;contents=expected;attempts=exhausted;state_changed=false;exhaustion_event=absent;entity_uuid=issue-validation-attached;retry_action_identity=validation-action-attached;failure_category=validation-timeout;prior_phase=entity-executing;pause_resume_phase=entity-executing;pause_identity=retry-pause-v1:c34493f991967f277e52a49218b9f70d9317932a4b6e3428de48e26eea3efb3e')
 [[ "$combined_timeout" == *$'category\tvalidation-timeout'* &&
    "$combined_timeout" == *$'allowed_mutations\tterminate-command,git-worktree-remove,filesystem-remove-transients,apply-needs-human'* &&
    "$combined_timeout" == *$'journal_events\taction-failed,retry-exhausted'* &&
@@ -218,13 +229,13 @@ combined_timeout=$(reduce_controller_state \
   fail "generic exhaustion took precedence over validation timeout"
 
 combined_changed_timeout=$(reduce_controller_state \
-  'surface=validation;command=timed-out;owned_path=known;containment=proved;marker=match;action_identity=match;attachment=reserved-unattached;git_metadata=absent;checkout=absent;contents=expected;attempts=exhausted;state_changed=true;state_change_observation=confirmed;exhaustion_event=recorded;retry_identity=stable;pause_identity=retry-pause-direct;resolution_event=recorded;resolution_pause_identity=retry-pause-direct;resolution_match=exact;disposition=resume-after-confirmed-external-state-change;resume_phase=confirmed')
+  'surface=validation;command=timed-out;owned_path=known;containment=proved;binding=confirmed-one-to-one;reservation=current-confirmed;ledger=reservation-action-match;marker=bound-match;bound_action=current-match;attachment=reserved-unattached;git_metadata=absent;checkout=absent;contents=expected;attempts=exhausted;state_changed=true;state_change_observation=confirmed;exhaustion_event=recorded;retry_identity=stable;pause_identity=retry-pause-direct;resolution_event=recorded;resolution_pause_identity=retry-pause-direct;resolution_match=exact;disposition=resume-after-confirmed-external-state-change;resume_phase=confirmed')
 [[ "$combined_changed_timeout" == *$'allowed_mutations\tterminate-command,filesystem-remove-reservation,resume-prior-phase,bounded-retry'* &&
    "$combined_changed_timeout" != *$'allowed_mutations\tbounded-retry'* ]] ||
   fail "state-change recovery canceled timeout termination/cleanup"
 
 combined_changed_timeout_unresolved=$(reduce_controller_state \
-  'surface=validation;command=timed-out;owned_path=known;containment=proved;marker=match;action_identity=match;attachment=reserved-unattached;git_metadata=absent;checkout=absent;contents=expected;attempts=exhausted;state_changed=true;state_change_observation=confirmed;exhaustion_event=recorded;retry_identity=stable;pause_identity=retry-pause-direct-unresolved;resolution_event=absent')
+  'surface=validation;command=timed-out;owned_path=known;containment=proved;binding=confirmed-one-to-one;reservation=current-confirmed;ledger=reservation-action-match;marker=bound-match;bound_action=current-match;attachment=reserved-unattached;git_metadata=absent;checkout=absent;contents=expected;attempts=exhausted;state_changed=true;state_change_observation=confirmed;exhaustion_event=recorded;retry_identity=stable;pause_identity=retry-pause-direct-unresolved;resolution_event=absent')
 [[ "$combined_changed_timeout_unresolved" == *$'allowed_mutations\tterminate-command,filesystem-remove-reservation'* &&
    "$combined_changed_timeout_unresolved" == *$'suppressed_actions\treview-publication,git-worktree-remove,resume-prior-phase,bounded-retry,remove-needs-human,duplicate-retry-exhausted,unbounded-retry'* &&
    "$combined_changed_timeout_unresolved" == *$'next_state_verdict\tinconclusive-cleanup-complete-needs-human-await-matching-resolution'* ]] ||

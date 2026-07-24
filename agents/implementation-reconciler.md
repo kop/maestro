@@ -20,7 +20,8 @@ updates to the main `symphony-reconcile` skill.
 Require the Symphony issue, implementation issue UUID and contract revision,
 approved DAG revision, final PR, merge SHA, final diff, resolved Maestro findings,
 upstream issues, downstream issues, Symphony outcome, and the controller's
-canonical exact post-merge reconciliation binding manifest/revision. Every
+canonical exact post-merge reconciliation binding manifest/revision,
+`reconciliation-input-v1` revision, and `reconcile-action-v1` identity. Every
 manifest entry must contain criterion/requirement key, evidence stage, source
 kind and static role, binding-context revision, resolved locator, resolution
 outcome, observable state, and provider identity/revision/evidence. Missing
@@ -77,12 +78,16 @@ Return exactly:
 complete | human-decision | inconclusive
 
 ## Merge identity
+Symphony UUID:
+Repository native identity:
 PR:
 Issue UUID:
 Merge SHA:
 Issue contract revision:
 DAG revision:
 Reconciliation binding manifest revision:
+Reconciliation input revision:
+Reconcile action identity:
 
 ## Reconciliation binding manifest
 | Criterion key | Requirement key | Evidence stage | Source kind | Static role | Binding context revision | Resolved locator | Resolution outcome | Observable state | Provider identity | Provider revision | Provider evidence |

@@ -9,6 +9,8 @@ fixture=tests/fixtures/review-preparation-cases.tsv
 assert_file "$helper"
 assert_executable "$helper"
 assert_file "$fixture"
+assert_file scripts/review_source_policy.py
+assert_contains "$helper" 'from review_source_policy import'
 
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -218,6 +220,42 @@ spelling = copy.deepcopy(base)
 spelling["capabilities"][0][1] = "  git  "
 if invoke("canonical-capability-spelling", spelling)["reservation"] != baseline:
     raise SystemExit("equivalent capability spelling changed reservation")
+
+policy_mutations = {
+    "mandatory-empty": lambda policy: policy.__setitem__(
+        "mandatory_plugin_sources", []
+    ),
+    "mandatory-reduced": lambda policy: policy["mandatory_plugin_sources"].remove(
+        "agents/symphony-reviewer.md"
+    ),
+    "mandatory-extra": lambda policy: policy["mandatory_plugin_sources"].append(
+        "agents/extra-reviewer.md"
+    ),
+    "skills-reduced": lambda policy: policy["skill_dependencies"].pop(),
+    "skills-extra": lambda policy: policy["skill_dependencies"].append(
+        "references/symphony/extra.md"
+    ),
+    "lenses-reduced": lambda policy: policy["lens_sources"].pop(
+        "maestro:test-analyzer"
+    ),
+    "lenses-extra": lambda policy: policy["lens_sources"].__setitem__(
+        "maestro:extra-reviewer", ["agents/extra-reviewer.md"]
+    ),
+    "lenses-unknown-agent": lambda policy: policy["lens_sources"].__setitem__(
+        "maestro:code-reviewer", ["agents/unknown.md"]
+    ),
+}
+for case_id, mutate in policy_mutations.items():
+    root = tmp_dir / f"policy-{case_id}"
+    shutil.copytree(plugin_root, root)
+    policy_path = root / "review-source-requirements-v1.json"
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    mutate(policy)
+    policy_path.write_text(
+        json.dumps(policy, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    invoke(f"policy-{case_id}", base, expect_ok=False, root=root)
 PY
 
 pass "pre-worktree review preparation and reservation identity"

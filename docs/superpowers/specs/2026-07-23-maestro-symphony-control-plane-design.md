@@ -642,7 +642,8 @@ Action identity uses identifiers supplied by Linear and GitHub:
 | Create candidate issue | Symphony ID + DAG revision + fixed node key |
 | Delegate issue | Linear issue UUID + contract revision + Cursor integration ID |
 | Review PR | GitHub PR ID + head SHA + contract revision + review-policy revision |
-| Reconcile merge | Linear issue UUID + merge SHA |
+| Reserve review worktree | Symphony UUID + implementation issue UUID + repository native identity + PR native ID + base/head SHAs + contract/DAG/policy revisions + exact `review-preparation-v1` revision |
+| Reconcile merge | Canonical `reconcile-action-v1` over Symphony UUID + implementation issue UUID + repository native identity + PR native ID + merge SHA + contract revision + approved DAG revision + exact current reconciliation binding manifest revision + `reconciliation-input-v1` revision |
 | Update downstream issue | Downstream issue UUID + source merge SHA + target contract revision |
 
 Human-visible action records may include a structured marker in inline code, but
@@ -711,19 +712,24 @@ work.
 For each newly merged PR:
 
 1. inspect the final diff and merge SHA;
-2. resolve every `reconciliation` and `both` requirement from authoritative
-   runtime context into one canonical exact binding manifest;
-3. run `implementation-reconciler` with that manifest and require every
+2. resolve every `reconciliation` and `both` requirement from the complete
+   provider-confirmed governing chain into one staged canonical exact binding
+   manifest before dispatch;
+3. derive `reconciliation-input-v1` from the full
+   Symphony/implementation/repository/PR/merge/contract/DAG identity, exact
+   manifest, final diff, and resolved finding/context authority, then derive
+   `reconcile-action-v1` from that input and manifest revision;
+4. run `implementation-reconciler` with that manifest/input/action identity and require every
    acceptance, deviation, and follow-up conclusion to reference its exact
    bindings;
-4. recompute and byte-compare the reconciliation manifest before accepting the
-   result;
-5. record `merge-reconciled` only for a same-identity `complete` result whose
+5. recompute and byte-compare the reconciliation manifest before accepting the
+   result, including the exact manifest echo and conclusion-to-binding mapping;
+6. record `merge-reconciled` only for a same-identity `complete` result whose
    required bindings and acceptance evidence are all exact and satisfied;
-6. in a separate transition consume confirmed `merge-reconciled`, append Actual
+7. in a separate transition consume confirmed `merge-reconciled`, append Actual
    Implementation and deviations, apply bounded downstream updates, mark only
    the implementation issue complete, and recalculate readiness; and
-7. evaluate Symphony closeout later against every closeout gate, emitting
+8. evaluate Symphony closeout later against every closeout gate, emitting
    `symphony-completed` exactly once. A merge transition never closes the
    Symphony.
 

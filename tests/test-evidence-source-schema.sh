@@ -117,6 +117,29 @@ def context(values):
         for field, value in values.items()
     }
 
+def relationships(values):
+    definitions = {
+        "symphony-implementation": ("symphony", "current_implementation_issue", "current_implementation_issue", [values["symphony"], values["current_implementation_issue"]]),
+        "implementation-repository": ("current_implementation_issue", "repository", "repository", [values["current_implementation_issue"], values["repository"]]),
+        "implementation-linked-pr": ("repository", "current_linked_pr", "current_linked_pr", [values["current_implementation_issue"], values["repository"], values["current_linked_pr"]]),
+        "linked-pr-base": ("current_linked_pr", "current_base", "current_base", [values["repository"], values["current_linked_pr"], values["current_base"]]),
+        "linked-pr-head": ("current_linked_pr", "current_head", "current_head", [values["repository"], values["current_linked_pr"], values["current_head"]]),
+        "linked-pr-merge": ("current_linked_pr", "current_merge", "current_merge", [values["repository"], values["current_linked_pr"], values["current_merge"]]),
+    }
+    return {
+        name: [{
+            "from_context": source,
+            "to_context": target,
+            "governs": governs,
+            "provider_locator": ["authoritative-relationship-v1", name, *identities],
+            "provider_state": "present",
+            "provider_record_id": f"relationship-record:{name}",
+            "provider_revision": f"relationship-revision:{name}",
+            "provider_evidence": f"relationship-evidence:{name}",
+        }]
+        for name, (source, target, governs, identities) in definitions.items()
+    }
+
 requirement = {
     "criterion_key": "criterion-v1:criterion",
     "required_outcome": "compatibility evidence",
@@ -136,6 +159,7 @@ result = {
 exact = {
     "requirement": requirement,
     "runtime_context": context(values),
+    "runtime_relationships": relationships(values),
     "provider_query": {"resolved_locator": resolved},
     "provider_results": [result],
 }
@@ -153,6 +177,7 @@ unresolved_locator[3] = "unresolved"
 unresolved = {
     "requirement": requirement,
     "runtime_context": context(unresolved_values),
+    "runtime_relationships": relationships(unresolved_values),
     "provider_query": {"resolved_locator": unresolved_locator},
     "provider_results": [],
 }

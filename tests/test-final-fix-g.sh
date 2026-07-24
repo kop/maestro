@@ -160,6 +160,7 @@ locators = {
     "current_head": ["authoritative-context-v1", "github-pr", context["repository"], context["current_linked_pr"], "head", context["current_head"]],
     "current_merge": ["authoritative-context-v1", "github-pr", context["repository"], context["current_linked_pr"], "merge", context["current_merge"]],
 }
+context_values = dict(context)
 context = {
     field: {
         "value": value,
@@ -170,6 +171,27 @@ context = {
         "provider_evidence": "missing" if value == "unresolved" else f"context-evidence:{field}",
     }
     for field, value in context.items()
+}
+relationship_definitions = {
+    "symphony-implementation": ("symphony", "current_implementation_issue", "current_implementation_issue", [context_values["symphony"], context_values["current_implementation_issue"]]),
+    "implementation-repository": ("current_implementation_issue", "repository", "repository", [context_values["current_implementation_issue"], context_values["repository"]]),
+    "implementation-linked-pr": ("repository", "current_linked_pr", "current_linked_pr", [context_values["current_implementation_issue"], context_values["repository"], context_values["current_linked_pr"]]),
+    "linked-pr-base": ("current_linked_pr", "current_base", "current_base", [context_values["repository"], context_values["current_linked_pr"], context_values["current_base"]]),
+    "linked-pr-head": ("current_linked_pr", "current_head", "current_head", [context_values["repository"], context_values["current_linked_pr"], context_values["current_head"]]),
+    "linked-pr-merge": ("current_linked_pr", "current_merge", "current_merge", [context_values["repository"], context_values["current_linked_pr"], context_values["current_merge"]]),
+}
+relationships = {
+    name: [{
+        "from_context": source,
+        "to_context": target,
+        "governs": governs,
+        "provider_locator": ["authoritative-relationship-v1", name, *identities],
+        "provider_state": "present",
+        "provider_record_id": f"relationship-record:{name}",
+        "provider_revision": f"relationship-revision:{name}",
+        "provider_evidence": f"relationship-evidence:{name}",
+    }]
+    for name, (source, target, governs, identities) in relationship_definitions.items()
 }
 if binding[7] == "exact":
     evidence = binding[10] if binding[8] == "present" else binding[8]
@@ -204,6 +226,7 @@ json.dump(
             "locator_template": requirement[6],
         },
         "runtime_context": context,
+        "runtime_relationships": relationships,
         "provider_query": {"resolved_locator": binding[5]},
         "provider_results": results,
     },
@@ -383,6 +406,7 @@ if mutated_lenses == manifest_lenses:
 mandatory = set(manifest["mandatory_plugin_sources"])
 required = {
     "review-source-requirements-v1.json",
+    "scripts/review_source_policy.py",
     "scripts/review-source-closure.py",
     "scripts/review-preparation.py",
     "evidence-source-schema-v1.json",

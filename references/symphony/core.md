@@ -101,15 +101,23 @@ Control contract revision: `symphony-control-v1`
 | Create candidate issue | Symphony UUID + approved DAG revision + fixed node key |
 | Create dependency edge | Symphony UUID + approved DAG revision + prerequisite node key + dependant node key + `blockedBy` |
 | Delegate issue | Linear issue UUID + contract revision + Cursor integration ID |
-| Reserve review worktree | Symphony UUID + implementation issue UUID + repository native identity + PR native ID + base/head SHAs + contract/DAG/policy revisions |
+| Reserve review worktree | Symphony UUID + implementation issue UUID + repository native identity + PR native ID + base/head SHAs + contract/DAG/policy revisions + exact `review-preparation-v1` revision |
 | Bind review reservation | Review worktree reservation identity + final Review PR action identity |
 | Review PR | Symphony UUID + implementation issue UUID + GitHub PR native ID + base SHA + head SHA + contract revision + DAG revision + review-policy revision + review input revision |
-| Reconcile merge | Linear issue UUID + merge SHA |
+| Reconcile merge | Canonical `reconcile-action-v1` over Symphony UUID + implementation issue UUID + repository native identity + PR native ID + merge SHA + contract revision + approved DAG revision + exact current reconciliation binding manifest revision + `reconciliation-input-v1` revision |
 | Update downstream issue | Downstream UUID + source merge SHA + target contract revision |
 | Create required follow-up issue | Symphony UUID + source implementation issue UUID + source merge SHA + fixed follow-up key |
 | Publish GitHub review record | Complete Review PR context + existing Review PR action identity + `github-review` channel |
 | Create Linear `@Cursor` follow-up | Complete Review PR context + existing Review PR action identity + `linear-cursor-follow-up` channel |
 | Complete Symphony | Symphony UUID + final approved DAG revision + final integration issue UUID + evidence revision |
+
+For merge reconciliation, first canonicalize
+`["maestro-reconciliation-input-v1","<Symphony UUID>","<implementation issue UUID>","<repository native identity>","<PR native ID>","<merge SHA>","<contract revision>","<approved DAG revision>",<complete canonical reconciliation binding manifest>,"<final diff revision>","<resolved finding/context revision>"]`
+as `reconciliation-input-v1:<lowercase SHA-256 hex>`. Then canonicalize
+`["maestro-reconcile-action-v1","<Symphony UUID>","<implementation issue UUID>","<repository native identity>","<PR native ID>","<merge SHA>","<contract revision>","<approved DAG revision>","<reconciliation binding manifest revision>","<reconciliation-input-v1 revision>"]`
+as `reconcile-action-v1:<lowercase SHA-256 hex>`. Recompute the current exact
+manifest and input before accepting a result; issue UUID plus merge SHA is never
+sufficient authority.
 
 Canonical identity text uses Unicode NFC normalization, converts CRLF and CR to
 LF, trims leading and trailing Unicode whitespace, and collapses each internal
@@ -180,6 +188,13 @@ requires one finite phase:
 Safe untracked artifacts do not enter or change the closure revision and remain
 disposable until guarded owned-worktree cleanup. The oracle never runs broad
 `git clean`, removes an artifact, or mutates the checkout to pass validation.
+`scripts/review_source_policy.py` is the one plugin-owned source-policy
+validator used by both `review-preparation.py` and
+`review-source-closure.py`. It fixes the mandatory source set, internal
+skill/reference/schema/oracle dependencies, mandatory Symphony reviewer, and
+finite lens-to-agent mapping. The checked-in manifest must match that authority
+exactly; empty, reduced, extra, reordered, unknown, or remapped authority is
+rejected in both paths. The shared validator is itself a mandatory source.
 For each exact path, hash exact file bytes with SHA-256. Record
 `["<plugin-source|repository-source|policy-source|validator-config>","<normalized path>","present","sha256:<digest>"]`
 or use the exact state/revision pairs `"missing","missing"` and
@@ -207,31 +222,36 @@ For every selected `evidence_requirement_key`, obtain the complete authoritative
 runtime context from confirmed provider reads: Symphony, implementation issue,
 repository, linked PR, base, head, and merge. The caller supplies provider query
 and result observations, never binding authority. The schema oracle
-requires each runtime-context value in a provider-confirmation envelope carrying
+requires each runtime-context entry in a provider-confirmation envelope carrying
 its finite governing locator, observable provider state, native record identity,
-provider revision, and evidence. Only `present` confirmation can support exact
+provider revision, and evidence. It also requires the schema-declared complete
+relationship chain for that source-kind/stage. Every relationship confirmation
+carries its from/to context, governed terminal token, provider-native locator,
+observable state, record identity, revision, and evidence. Only one internally
+consistent `present` confirmation per required entry and edge can support exact
 resolution; a selected `missing`, `unavailable`, or unresolved governing value
-makes the binding unresolved and non-publishable. The governing locators mechanically link implementation to Symphony,
-repository to implementation, and PR/base/head/merge to the same implementation
-and repository; a flat, unrelated, or internally relinked context is rejected.
-The schema oracle
-canonicalizes the requirement first, selects only the context fields named by
-that requirement's finite locator-template shape, derives the binding-context
-revision, substitutes every token itself, and validates the provider query and
-result locator against that derived locator. Caller-supplied resolved locator or
+makes the binding unresolved and non-publishable; missing/severed edges are
+unresolved, while conflicting, relinked, or multiply confirmed edges are
+ambiguous and non-publishable. The governing chain mechanically links Symphony
+to implementation, implementation to declared repository, repository to linked
+PR, and PR to the applicable base/head/merge terminal. Linear and durable-manual
+records retain the Symphony/implementation/repository authority root.
+The schema oracle canonicalizes the requirement first, selects every entry and
+edge declared by that variant's governing-context contract, derives the
+binding-context revision, substitutes every token itself, and independently
+validates that the provider query/result locator belongs to the confirmed
+terminal context. Caller-supplied resolved locator or
 binding-context revision is only an assertion and must match the oracle's
 derived bytes exactly. Create exactly one runtime binding entry, sorted by
 canonical requirement key:
 
 Canonicalize the binding context as
-`["maestro-evidence-binding-context-v1",[[<selected context field>,<exact authoritative value or unresolved>],...]]`
+`["maestro-evidence-binding-context-v1",[[<required context field>,<value, locator, state, identity, revision, evidence>],...],[[<required relationship edge>,[<canonical provider confirmations>]],...]]`
 and digest it as
-`evidence-binding-context-v1:<lowercase SHA-256 hex>`. The token/value array is
-complete and sorted by the canonical context-field order. Each selected item
-contains the value plus its provider locator/state/identity/revision/evidence. It
-contains Symphony plus only the repository/locator token fields selected by the
-requirement's schema shape; no requirement identity or unselected runtime value
-enters it.
+`evidence-binding-context-v1:<lowercase SHA-256 hex>`. The entry and relationship
+arrays are complete and use their canonical orders. Provider-native entry and
+edge identities/revisions are revision inputs. Requirement identity and
+unselected runtime values do not enter the context revision.
 
 ```text
 ["maestro-acceptance-evidence-binding-v1","<criterion key>","<evidence requirement key>","<source kind>",<approved locator template>,<oracle-derived resolved provider locator>,"<oracle-derived binding context revision>","exact"|"unresolved"|"ambiguous","present"|"missing"|"unavailable","<provider-native record identity or sentinel>","<provider revision/content digest or sentinel>","<provider evidence or sentinel>"]
