@@ -1,0 +1,143 @@
+{
+  "version": "evidence-source-schema-v1",
+  "evidence_stages": [
+    "review",
+    "reconciliation",
+    "both"
+  ],
+  "binding_tokens": [
+    "current_implementation_issue",
+    "current_linked_pr",
+    "current_base",
+    "current_head",
+    "current_merge"
+  ],
+  "resolution_outcomes": [
+    "exact",
+    "unresolved",
+    "ambiguous"
+  ],
+  "observable_states": [
+    "present",
+    "missing",
+    "unavailable"
+  ],
+  "source_kinds": {
+    "linear-issue": {
+      "variants": [
+        {
+          "stages": ["review", "reconciliation", "both"],
+          "provider_record_roles": ["implementation-issue"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:linear-issue", "token:current_implementation_issue", "role", "selector:section"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:linear-issue", "binding:current_implementation_issue", "role", "selector:section"]
+        }
+      ]
+    },
+    "linear-comment": {
+      "variants": [
+        {
+          "stages": ["review", "reconciliation", "both"],
+          "provider_record_roles": ["acceptance-comment"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:linear-comment", "token:current_implementation_issue", "role", "selector:record_marker"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:linear-comment", "binding:current_implementation_issue", "role", "selector:record_marker"]
+        }
+      ]
+    },
+    "linear-document": {
+      "variants": [
+        {
+          "stages": ["review", "reconciliation", "both"],
+          "provider_record_roles": ["design-document"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:linear-document", "token:current_implementation_issue", "role", "selector:section"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:linear-document", "binding:current_implementation_issue", "role", "selector:section"]
+        }
+      ]
+    },
+    "github-pr": {
+      "variants": [
+        {
+          "stages": ["review", "reconciliation", "both"],
+          "provider_record_roles": ["linked-pr"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:github-pr", "selector:repository", "token:current_linked_pr", "role", "selector:field"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-pr", "selector:repository", "binding:current_linked_pr", "role", "selector:field"]
+        }
+      ]
+    },
+    "github-comment": {
+      "variants": [
+        {
+          "stages": ["review", "reconciliation", "both"],
+          "provider_record_roles": ["acceptance-comment"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:github-comment", "selector:repository", "token:current_linked_pr", "role", "selector:record_marker"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-comment", "selector:repository", "binding:current_linked_pr", "role", "selector:record_marker"]
+        }
+      ]
+    },
+    "github-review": {
+      "variants": [
+        {
+          "stages": ["review", "reconciliation", "both"],
+          "provider_record_roles": ["required-review"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:github-review", "selector:repository", "token:current_linked_pr", "role", "selector:record_marker"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-review", "selector:repository", "binding:current_linked_pr", "role", "selector:record_marker"]
+        }
+      ]
+    },
+    "github-check-run": {
+      "variants": [
+        {
+          "stages": ["review", "reconciliation", "both"],
+          "provider_record_roles": ["integration-check"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:github-check-run", "selector:repository", "token:current_head", "role", "selector:check_name"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-check-run", "selector:repository", "binding:current_head", "role", "selector:check_name"]
+        }
+      ]
+    },
+    "github-artifact": {
+      "variants": [
+        {
+          "stages": ["review", "reconciliation", "both"],
+          "provider_record_roles": ["integration-artifact"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:github-artifact", "selector:repository", "token:current_head", "role", "selector:workflow_name", "selector:artifact_name"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:github-artifact", "selector:repository", "binding:current_head", "role", "selector:workflow_name", "selector:artifact_name"]
+        }
+      ]
+    },
+    "repository-file": {
+      "variants": [
+        {
+          "stages": ["review", "reconciliation", "both"],
+          "provider_record_roles": ["compatibility-report"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:repository-file", "selector:repository", "token:current_head", "role", "selector:repository_path"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:repository-file", "selector:repository", "binding:current_head", "role", "selector:repository_path"]
+        }
+      ]
+    },
+    "repository-commit": {
+      "variants": [
+        {
+          "stages": ["review"],
+          "provider_record_roles": ["reviewed-head"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:repository-commit", "selector:repository", "token:current_head", "role"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:repository-commit", "selector:repository", "binding:current_head", "role"]
+        },
+        {
+          "stages": ["reconciliation"],
+          "provider_record_roles": ["implementation-merge"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:repository-commit", "selector:repository", "token:current_merge", "role"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:repository-commit", "selector:repository", "binding:current_merge", "role"]
+        }
+      ]
+    },
+    "manual-validation": {
+      "variants": [
+        {
+          "stages": ["review", "reconciliation", "both"],
+          "provider_record_roles": ["manual-record"],
+          "locator_template_shape": ["literal:locator-template-v1", "literal:manual-validation", "token:current_implementation_issue", "role", "selector:record_marker"],
+          "provider_locator_shape": ["literal:resolved-locator-v1", "literal:manual-validation", "binding:current_implementation_issue", "role", "selector:record_marker"]
+        }
+      ]
+    }
+  }
+}

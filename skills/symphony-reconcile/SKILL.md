@@ -90,11 +90,15 @@ rule symphony-reconcile-consume-event-issue-dispatched | when cursor-delegation-
 
 rule symphony-reconcile-consume-event-review-requested | when canonical-review-input-revision-is-durably-confirmed | consume event `review-requested` | next review-revision-eligible | choice none
 
+rule symphony-reconcile-consume-event-review-worktree-reserved | when canonical-preclosure-review-reservation-is-confirmed | consume event `review-worktree-reserved` | next reservation-authorized | choice none
+
+rule symphony-reconcile-consume-event-review-worktree-action-bound | when reservation-to-final-review-action-binding-is-confirmed | consume event `review-worktree-action-bound` | next action-binding-confirmed | choice none
+
 rule symphony-reconcile-consume-event-review-recorded | when canonical-exact-head-and-input-revision-review-record-is-confirmed | consume event `review-recorded` | next review-gate-recorded | choice none
 
-rule symphony-reconcile-consume-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | consume event `review-stale-head` | next review-new-head | choice none
+rule symphony-reconcile-consume-event-review-stale-head | when remote-pr-head-changed-and-review-requested-is-absent | consume event `review-stale-head` | next review-new-head | choice none
 
-rule symphony-reconcile-consume-event-review-input-stale | when current-review-input-differs-from-reviewed-input | consume event `review-input-stale` | next new-review-input-eligible | choice none
+rule symphony-reconcile-consume-event-review-input-stale | when full-input-changed-or-underivable-and-review-requested-is-confirmed | consume event `review-input-stale` | next new-review-input-eligible | choice none
 
 rule symphony-reconcile-consume-event-merge-observed | when github-merge-sha-is-freshly-confirmed | consume event `merge-observed` | next merge-reconciliation-pending | choice none
 
@@ -215,23 +219,45 @@ A base SHA movement or Symphony/implementation/PR relink makes every old result 
 
 1. Confirm Symphony/implementation/PR/repository/base/head identities,
    governance revisions, required lenses/validators, and the plan-time evidence
-   requirements. Resolve every evidence requirement template against freshly
-   confirmed native state; zero or multiple matches fail closed.
-2. Create the owned exact-head worktree before source closure or `review-requested`.
-   Verify marker/containment, expected GitHub repository, detached state, clean
-   tracked/staged state, and `git rev-parse HEAD == <expected head SHA>`.
-3. From that exact root derive repository policy/config closure, combine it with
-   the plugin-owned authoritative closure, capability state, binding manifest,
-   decision resolutions, and canonical input/action arrays.
-4. If the matching `review-requested` event is absent, append and confirm it
-   before dispatching an expensive review or publishing either channel. After
-   confirmation, keep the same verified worktree and ledger for dispatch; never
-   reconstruct closure or review from a different root.
+   requirements. For pre-merge review resolve only `review` and `both`; a
+   reconciliation-only unresolved binding cannot block review. After merge
+   resolve only `reconciliation` and `both`, require every binding to be exact,
+   and keep post-merge evidence gating `merge-reconciled`, implementation
+   completion, and closeout. Zero or multiple matches fail closed.
+2. Derive and confirm the stable review worktree reservation from
+   Symphony/implementation/repository/PR/base/head/contract/DAG/policy inputs.
+   Write only that reservation to the initial cleanup ledger and marker, then
+   create the owned exact-head worktree before source closure or
+   `review-requested`. Verify marker/containment, expected GitHub repository,
+   detached state, fully clean pre-review state, and
+   `git rev-parse HEAD == <expected head SHA>`.
+3. From that exact root derive the explicit repository
+   evidence/instruction/policy/config closure and require the descriptor-level
+   declaration that every implicit repository source is listed, even with no
+   validators. Combine it with the plugin-owned authoritative closure,
+   capability state, binding manifest, decision resolutions, and canonical
+   input/action arrays using
+   `--phase pre-review`. Publication rederivation uses
+   `--phase pre-publication`, which allows only path-disjoint untracked regular
+   validation artifacts and rejects tracked/symlink/submodule mutation.
+4. Append and confirm one durable reservation-to-action binding. Only then
+   atomically update the marker to repeat the bound action identity and verify
+   the journal/marker pair. If the matching `review-requested` event is absent,
+   append and confirm it before dispatching an expensive review or publishing
+   either channel. Keep the same worktree and ledger throughout.
 5. If no result exists, dispatch internal `maestro:symphony-review` with the same
    ledger/worktree. Ownership transfer occurs only after confirmed dispatch as
    an atomic durable cleanup-ledger owner update; cleanup remains
    reconciliation-owned when dispatch fails, and the guarded attachment-state
    branch runs before return. There is no reverse transfer after review begins.
+
+Crash recovery is state-derived: reservation confirmed with no worktree resumes
+owned creation; worktree attached with no source closure resumes closure;
+action binding confirmed with marker not updated performs only the atomic marker
+update; a marker claiming a binding absent from the journal must fail closed
+without dispatch, transfer, or deletion. Dispatch absent always leaves cleanup
+ownership with reconciliation; dispatch confirmed permits the one-way transfer
+to review.
 6. Record its exact-head and exact-input-revision result and cleanup status.
 7. If `review-input-stale` is returned, the old result satisfies and blocks
    nothing; the event's newly derived input is eligible for a fresh request.
@@ -252,6 +278,12 @@ A base SHA movement or Symphony/implementation/PR relink makes every old result 
    only the affected subgraph.
 
 rule symphony-reconcile-append-event-review-requested | when canonical-review-input-revision-is-durably-confirmed | append event `review-requested` | next review-revision-eligible | choice none
+
+rule symphony-reconcile-append-event-review-worktree-reserved | when canonical-preclosure-review-reservation-is-confirmed | append event `review-worktree-reserved` | next reservation-authorized | choice none
+
+rule symphony-reconcile-append-event-review-worktree-action-bound | when reservation-to-final-review-action-binding-is-confirmed | append event `review-worktree-action-bound` | next action-binding-confirmed | choice none
+
+rule symphony-reconcile-append-event-review-stale-head | when remote-pr-head-changed-and-review-requested-is-absent | append event `review-stale-head` | next review-new-head | choice none
 
 Consume the review result according to its exact returned value:
 
@@ -505,10 +537,12 @@ rule symphony-reconcile-emit-failure-category-semantic-drift | when semantic-dri
 rule symphony-reconcile-consume-failure-category-semantic-drift | when semantic-drift-category-is-evidenced | consume failure category `semantic-drift` | next semantic-drift-recovery | choice none
 Retryability: Do not retry mutation; require bounded decision or strategic revision
 
-rule symphony-reconcile-consume-failure-category-review-stale-head | when review-stale-head-category-is-evidenced | consume failure category `review-stale-head` | next review-stale-head-recovery | choice none
+rule symphony-reconcile-emit-failure-category-review-stale-head | when review-stale-head-before-request-category-is-evidenced | emit failure category `review-stale-head` | next review-stale-head-recovery | choice none
+
+rule symphony-reconcile-consume-failure-category-review-stale-head | when review-stale-head-before-request-category-is-evidenced | consume failure category `review-stale-head` | next review-stale-head-recovery | choice none
 Retryability: Do not retry the stale identity; create a new identity for the new head
 
-rule symphony-reconcile-consume-failure-category-review-input-stale | when review-input-stale-category-is-evidenced | consume failure category `review-input-stale` | next new-review-input-eligible | choice none
+rule symphony-reconcile-consume-failure-category-review-input-stale | when review-input-stale-after-request-category-is-evidenced | consume failure category `review-input-stale` | next new-review-input-eligible | choice none
 Retryability: Do not retry or publish the stale result; reconcile the newly derived input
 
 rule symphony-reconcile-consume-failure-category-validation-timeout | when validation-timeout-category-is-evidenced | consume failure category `validation-timeout` | next validation-timeout-recovery | choice none

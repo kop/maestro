@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import stat
 import subprocess
 import sys
 import unicodedata
@@ -21,11 +23,14 @@ VALIDATOR_KINDS = {
     "github-actions-workflow",
 }
 CAPABILITY_STATES = {"present", "missing", "unavailable"}
+SOURCE_CLOSURE_PHASES = {"pre-review", "pre-publication"}
 GLOB_CHARACTERS = {"*", "?", "["}
 PLUGIN_REQUIREMENTS_PATH = "review-source-requirements-v1.json"
 MANDATORY_PLUGIN_SOURCES = {
     PLUGIN_REQUIREMENTS_PATH,
     "scripts/review-source-closure.py",
+    "evidence-source-schema-v1.json",
+    "scripts/evidence-source-schema.py",
     "skills/symphony-review/SKILL.md",
     "references/symphony/core.md",
     "references/symphony/linear.md",
@@ -108,6 +113,11 @@ def resolve_contained(root: Path, relative_path: str, field: str) -> Path:
 
 def source_entry(root: Path, value: Any, kind: str, field: str) -> list[str]:
     relative_path = normalize_relative_path(value, field)
+    cursor = root.resolve()
+    for component in PurePosixPath(relative_path).parts:
+        cursor /= component
+        if cursor.is_symlink():
+            raise ClosureError(f"{field} must not traverse a symlink")
     path = resolve_contained(root, relative_path, field)
     if not path.exists():
         return [kind, relative_path, "missing", "missing"]
@@ -271,14 +281,159 @@ def validate_repository_binding(
         pass
     else:
         raise ClosureError("repository worktree must be detached at expected head")
-    if git_output(repository_root, "status", "--porcelain", "--untracked-files=all"):
-        raise ClosureError("repository worktree has unexpected changes")
     actual_repository = github_repository_from_remote(
         git_output(repository_root, "remote", "get-url", "origin")
     )
     if actual_repository != expected_repository:
         raise ClosureError("repository identity differs from expected repository")
     return ["repository-binding-v1", expected_repository, expected_head]
+
+
+def git_status_entries(repository_root: Path) -> list[tuple[str, str]]:
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository_root),
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--untracked-files=all",
+                "--ignored=matching",
+                "--ignore-submodules=none",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        output = result.stdout.decode("utf-8")
+    except (OSError, UnicodeError, subprocess.CalledProcessError) as error:
+        raise ClosureError("repository worktree state is not verifiable") from error
+    entries = []
+    for record in output.split("\0"):
+        if not record:
+            continue
+        if len(record) < 4 or record[2] != " ":
+            raise ClosureError("repository worktree status is ambiguous")
+        entries.append((record[:2], record[3:]))
+    return entries
+
+
+def paths_overlap_or_shadow(artifact: str, authority: str) -> bool:
+    artifact_path = PurePosixPath(artifact)
+    authority_path = PurePosixPath(authority)
+    artifact_parts = tuple(part.casefold() for part in artifact_path.parts)
+    authority_parts = tuple(part.casefold() for part in authority_path.parts)
+    if artifact_parts == authority_parts:
+        return True
+    if (
+        artifact_parts == authority_parts[: len(artifact_parts)]
+        or authority_parts == artifact_parts[: len(authority_parts)]
+    ):
+        return True
+    if artifact_parts[:-1] == authority_parts[:-1]:
+        artifact_name = artifact_parts[-1]
+        authority_name = authority_parts[-1]
+        if (
+            artifact_name == authority_name
+            or artifact_name.startswith(authority_name + ".")
+            or authority_name.startswith(artifact_name + ".")
+        ):
+            return True
+    return False
+
+
+def validate_artifact_path(path: str, authority_paths: set[str]) -> None:
+    if any(
+        paths_overlap_or_shadow(path, authority_path)
+        for authority_path in authority_paths
+    ):
+        raise ClosureError(
+            "validation artifact aliases, contains, or shadows a declared source"
+        )
+
+
+def validate_artifact_tree(
+    repository_root: Path,
+    path: str,
+    authority_paths: set[str],
+    authority_identities: set[tuple[int, int]],
+) -> None:
+    path = normalize_relative_path(path.rstrip("/"), "validation artifact")
+    validate_artifact_path(path, authority_paths)
+    artifact = repository_root / path
+    try:
+        artifact_stat = artifact.lstat()
+    except OSError as error:
+        raise ClosureError("validation artifact is not inspectable") from error
+    if stat.S_ISLNK(artifact_stat.st_mode):
+        raise ClosureError("validation artifact must not be a symlink")
+    if stat.S_ISREG(artifact_stat.st_mode):
+        if (artifact_stat.st_dev, artifact_stat.st_ino) in authority_identities:
+            raise ClosureError("validation artifact is a hard-link alias of a source")
+        return
+    if not stat.S_ISDIR(artifact_stat.st_mode):
+        raise ClosureError("validation artifact is not a regular file or directory")
+    try:
+        children = sorted(os.scandir(artifact), key=lambda entry: entry.name)
+    except OSError as error:
+        raise ClosureError("validation artifact directory is not inspectable") from error
+    for child in children:
+        child_path = (PurePosixPath(path) / child.name).as_posix()
+        validate_artifact_tree(
+            repository_root,
+            child_path,
+            authority_paths,
+            authority_identities,
+        )
+
+
+def source_file_identities(
+    root: Path,
+    entries: list[list[str]],
+) -> set[tuple[int, int]]:
+    identities = set()
+    for entry in entries:
+        if entry[2] != "present":
+            continue
+        try:
+            source_stat = (root / entry[1]).lstat()
+        except OSError as error:
+            raise ClosureError("declared source identity is not inspectable") from error
+        if not stat.S_ISREG(source_stat.st_mode):
+            raise ClosureError("declared source identity is not a regular file")
+        identities.add((source_stat.st_dev, source_stat.st_ino))
+    return identities
+
+
+def validate_worktree_phase(
+    repository_root: Path,
+    phase: str,
+    authority_paths: set[str],
+    authority_identities: set[tuple[int, int]],
+    implicit_sources_forbidden: bool,
+) -> None:
+    phase = normalize_text(phase, "phase")
+    if phase not in SOURCE_CLOSURE_PHASES:
+        raise ClosureError("phase is not finite")
+    entries = git_status_entries(repository_root)
+    if phase == "pre-review":
+        if entries:
+            raise ClosureError("pre-review worktree must be fully clean")
+        return
+    if not implicit_sources_forbidden:
+        raise ClosureError("pre-publication implicit source discovery is possible")
+    for state, raw_path in entries:
+        if state not in {"??", "!!"}:
+            raise ClosureError(
+                "pre-publication tracked, staged, symlink, or submodule mutation"
+            )
+        validate_artifact_tree(
+            repository_root,
+            raw_path,
+            authority_paths,
+            authority_identities,
+        )
 
 
 def validator_entry(repository_root: Path, value: Any, index: int) -> list[Any]:
@@ -341,6 +496,7 @@ def build_closure(
     descriptor: Any,
     expected_repository: str,
     expected_head: str,
+    phase: str,
 ) -> list[Any]:
     _, requirements_revision = load_plugin_requirements(plugin_root)
     repository_binding = validate_repository_binding(
@@ -350,7 +506,14 @@ def build_closure(
         raise ClosureError("descriptor must be an object")
     require_exact_keys(
         descriptor,
-        {"version", "selected_lenses", "policy_sources", "validators"},
+        {
+            "version",
+            "selected_lenses",
+            "repository_sources",
+            "policy_sources",
+            "implicit_sources_declared",
+            "validators",
+        },
         "descriptor",
     )
     if descriptor["version"] != "review-source-closure-v1":
@@ -382,6 +545,14 @@ def build_closure(
         "policy-source",
         "policy_sources",
     )
+    repository_sources = source_list(
+        repository_root,
+        descriptor["repository_sources"],
+        "repository-source",
+        "repository_sources",
+    )
+    if descriptor["implicit_sources_declared"] is not True:
+        raise ClosureError("descriptor has undeclared implicit repository sources")
     validators = descriptor["validators"]
     if not isinstance(validators, list):
         raise ClosureError("validators must be an explicit list")
@@ -391,12 +562,41 @@ def build_closure(
             for index, value in enumerate(validators)
         ]
     )
+    authority_paths = {
+        entry[1]
+        for entry in plugin_sources + repository_sources + policy_sources
+    }
+    authority_identities = source_file_identities(plugin_root, plugin_sources)
+    authority_identities.update(
+        source_file_identities(
+            repository_root,
+            repository_sources + policy_sources,
+        )
+    )
+    for validator in validator_entries:
+        authority_paths.update(entry[1] for entry in validator[4])
+        authority_identities.update(
+            source_file_identities(repository_root, validator[4])
+        )
+    validate_worktree_phase(
+        repository_root,
+        phase,
+        authority_paths,
+        authority_identities,
+        descriptor["implicit_sources_declared"] is True
+        and all(
+            value.get("implicit_sources_declared") is True
+            for value in validators
+            if isinstance(value, dict)
+        ),
+    )
     return [
         "review-source-closure-v1",
         requirements_revision,
         repository_binding,
         selected_lenses,
         plugin_sources,
+        repository_sources,
         policy_sources,
         validator_entries,
     ]
@@ -408,6 +608,11 @@ def main() -> int:
     parser.add_argument("--repository-root", required=True, type=Path)
     parser.add_argument("--expected-repository", required=True)
     parser.add_argument("--expected-head", required=True)
+    parser.add_argument(
+        "--phase",
+        required=True,
+        choices=sorted(SOURCE_CLOSURE_PHASES),
+    )
     parser.add_argument("--descriptor", required=True, type=Path)
     args = parser.parse_args()
     try:
@@ -418,6 +623,7 @@ def main() -> int:
             descriptor,
             args.expected_repository,
             args.expected_head,
+            args.phase,
         )
     except (ClosureError, OSError, UnicodeError, json.JSONDecodeError) as error:
         print(f"review-source-closure error: {error}", file=sys.stderr)

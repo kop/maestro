@@ -28,11 +28,13 @@ issues, downstream issues, and Symphony goal.
 Consume only a durably confirmed request whose Symphony UUID, implementation
 issue UUID, PR native ID, base/head SHAs, governance revisions, source-closure
 revision, authoritative review-source requirements and revision,
-plan-time evidence requirements, acceptance-evidence binding manifest/revision, complete required evidence
+plan-time `review`/`both` evidence requirements, acceptance-evidence binding manifest/revision, complete required evidence
 manifest, applicable matching decision-resolutions, review input revision, and
 Review PR action identity match this invocation.
 
 rule symphony-review-consume-event-review-requested | when canonical-review-input-revision-is-durably-confirmed | consume event `review-requested` | next review-revision-eligible | choice none
+
+rule symphony-review-consume-event-review-worktree-action-bound | when reservation-to-final-review-action-binding-is-confirmed | consume event `review-worktree-action-bound` | next action-binding-confirmed | choice none
 
 Return `inconclusive` when:
 
@@ -45,8 +47,9 @@ Return `inconclusive` when:
 Before confirmed dispatch/transfer, reconciliation retains cleanup ownership.
 After confirmed transfer, review retains cleanup ownership and cleans on every exit, including invalid-input exits; there is no reverse transfer.
 
-Record `review-stale-head` only when the requested head is already stale before
-any reviewer consumes the reviewed input. After review begins, every
+Reconciliation records `review-stale-head` only when the requested head is
+already stale before `review-requested`; this review skill never appends it.
+After review begins, every
 prepublication difference, including head movement, produces exactly one
 `review-input-stale` and never `review-stale-head`.
 
@@ -86,22 +89,37 @@ required validator is uncertainty, not a silent pass.
 
 ## Accept the prepared exact-head worktree
 
-Reconciliation creates or acquires the owned isolated detached worktree before
-source closure and `review-requested`, then transfers cleanup ownership only
-after dispatch is confirmed. Consume that exact cleanup-ledger entry and no
-caller-selected repository root. Before use, revalidate ownership marker, component-level containment, repository identity, detached attachment state, clean tracked/staged state, and `git rev-parse HEAD == <expected head SHA>`.
+Reconciliation confirms a pre-closure review worktree reservation, creates or
+acquires the owned isolated detached worktree under its reservation-only marker,
+derives closure/action, confirms the durable reservation-to-action binding, and
+atomically updates the marker before `review-requested`. Cleanup by reservation
+identity remains valid before final action binding. Review consumes that exact
+cleanup-ledger entry only after dispatch is confirmed; before use, revalidate
+the reservation, journal action binding, bound marker, component containment,
+repository identity, detached attachment state, and
+`git rev-parse HEAD == <expected head SHA>`.
 Any mismatch publishes nothing, returns `inconclusive`, and follows guarded
 cleanup. A diff-only reviewer may receive no worktree; every command-running
 reviewer uses the transferred exact-head worktree or a separately ledgered
 worktree derived from that same confirmed repository/head.
 
 Maintain the transferred cleanup ledger containing repository, canonical
-worktree path, canonical review directory, marker contents, expected action
-identity, attachment state, and current cleanup owner.
+worktree path, canonical review directory, marker contents, reservation
+identity, bound action identity, attachment state, and current cleanup owner.
+If the marker claims a binding absent from the journal, fail closed and retain
+cleanup debt without dispatch or deletion.
 Confirmed dispatch atomically and durably changes that ledger owner from
 reconciliation to review before review work begins.
 
 ## Run contained validation commands
+
+At pre-review require the exact-head worktree to be fully clean. At
+pre-publication, fail on any tracked, staged, symlink, or submodule mutation.
+Allow an untracked validation artifact only when the descriptor explicitly
+declares every implicit source—even with no validators—and its path cannot
+equal, alias, contain, be contained by, or shadow any declared source path,
+including repository evidence, policy, configuration, or instructions. Do not run `git clean`;
+disposable outputs are removed only by guarded cleanup.
 
 Every validation command runs with its assigned owned worktree as its exact CWD
 and an explicit timeout. Immediately before and after each command, compare the
@@ -124,7 +142,7 @@ full Required review identity
 confirmed review-requested record and exact review input revision
 plugin-owned review-source requirements exact-byte revision
 confirmed review-source-closure-v1 descriptor/revision
-complete plan-time evidence requirements and typed runtime binding manifest/revision
+complete plan-time `review`/`both` evidence requirements and typed runtime binding manifest/revision
 Symphony outcome and constraints
 implementation issue contract and acceptance criteria
 approved DAG revision
@@ -184,7 +202,7 @@ Never implement the fix, generate a patch, or ask a reviewer to do so.
 ## Revalidate before publication
 
 Immediately before any GitHub review/comment publication, freshly re-read the complete current review context.
-Resolve every plan-time evidence requirement against freshly confirmed native state; then freshly rederive review context, evidence templates/bindings, acceptance-evidence manifest, exact-head source closure, capability state, decision-resolution revision, and the complete review-input-v1 revision.
+Resolve every plan-time `review` and `both` evidence requirement against freshly confirmed native state; a reconciliation-only unresolved requirement cannot block this pre-merge review. Require `resolution_outcome=exact` for every binding that enters the publishable manifest; then freshly rederive review context, evidence templates/bindings, acceptance-evidence manifest, exact-head source closure, capability state, decision-resolution revision, and the complete review-input-v1 revision.
 Revalidate worktree ownership, repository identity, and head before use.
 Compare the canonical input bytes and revision byte-for-byte with the revision
 actually reviewed.
@@ -228,6 +246,17 @@ search before create and after an ambiguous response, and link exactly one
 confirmed canonical GitHub record. This Linear comment is the implementation
 follow-up channel.
 
+After that GitHub record is confirmed and immediately before any Linear
+`@Cursor` follow-up, re-read, rebind, and rederive the complete current review
+input again with `pre-publication` closure. Require byte equality with the
+reviewed and GitHub-published revision. If changed or underivable, do not publish
+Linear; append exactly one `review-input-stale` referencing the already-published
+GitHub record and the old, new, or `underivable` revision. The already-published
+GitHub record remains historical and cannot satisfy the current Maestro pass
+gate. Clean the owned worktree; make a derivable new revision eligible or enter
+bounded derivation recovery. If unchanged, search and publish or recover exactly
+one canonical Linear follow-up.
+
 For `human-decision`, publish a non-approving review/comment and record the
 prior/resume phase. Apply `maestro:scope-change` for a strategic contract/DAG
 revision or `maestro:needs-human` for a bounded decision. Do not mention `@Cursor`
@@ -252,9 +281,7 @@ attempt, append `action-failed` with its finite failure category. Use
 
 rule symphony-review-append-event-review-recorded | when canonical-exact-head-and-input-revision-review-record-is-confirmed | append event `review-recorded` | next review-gate-recorded | choice none
 
-rule symphony-review-append-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | append event `review-stale-head` | next review-new-head | choice none
-
-rule symphony-review-append-event-review-input-stale | when current-review-input-differs-from-reviewed-input | append event `review-input-stale` | next new-review-input-eligible | choice none
+rule symphony-review-append-event-review-input-stale | when full-input-changed-or-underivable-and-review-requested-is-confirmed | append event `review-input-stale` | next new-review-input-eligible | choice none
 
 rule symphony-review-append-event-human-decision-required | when bounded-or-strategic-human-authority-is-required | append event `human-decision-required` | next affected-subgraph-paused | choice none
 
@@ -269,7 +296,10 @@ For each cleanup-ledger entry:
 
 1. Canonicalize paths again.
 2. Verify component-level containment beneath the dedicated root.
-3. Read and match the ownership marker and expected action identity.
+3. Read and match the ownership marker and reservation identity. Before action
+   binding, that reservation match is sufficient for guarded cleanup. After a
+   confirmed journal binding, also require the bound action identity; a marker
+   claim without its journal binding fails closed.
 4. Branch on the explicit attachment state:
    - For `attached-worktree`, confirm Git worktree metadata matches the expected repository and canonical path. Remove the expected worktree through Git,
      then remove only expected owned transient artifacts.
@@ -357,14 +387,9 @@ rule symphony-review-emit-failure-category-semantic-drift | when semantic-drift-
 rule symphony-review-consume-failure-category-semantic-drift | when semantic-drift-category-is-evidenced | consume failure category `semantic-drift` | next semantic-drift-recovery | choice none
 Retryability: Do not retry mutation; require bounded decision or strategic revision
 
-rule symphony-review-emit-failure-category-review-stale-head | when review-stale-head-category-is-evidenced | emit failure category `review-stale-head` | next review-stale-head-recovery | choice none
+rule symphony-review-emit-failure-category-review-input-stale | when review-input-stale-after-request-category-is-evidenced | emit failure category `review-input-stale` | next new-review-input-eligible | choice none
 
-rule symphony-review-consume-failure-category-review-stale-head | when review-stale-head-category-is-evidenced | consume failure category `review-stale-head` | next review-stale-head-recovery | choice none
-Retryability: Do not retry the stale identity; create a new identity for the new head
-
-rule symphony-review-emit-failure-category-review-input-stale | when review-input-stale-category-is-evidenced | emit failure category `review-input-stale` | next new-review-input-eligible | choice none
-
-rule symphony-review-consume-failure-category-review-input-stale | when review-input-stale-category-is-evidenced | consume failure category `review-input-stale` | next new-review-input-eligible | choice none
+rule symphony-review-consume-failure-category-review-input-stale | when review-input-stale-after-request-category-is-evidenced | consume failure category `review-input-stale` | next new-review-input-eligible | choice none
 Retryability: Do not retry or publish the stale result; reconcile the newly derived input
 
 rule symphony-review-emit-failure-category-validation-timeout | when validation-timeout-category-is-evidenced | emit failure category `validation-timeout` | next validation-timeout-recovery | choice none

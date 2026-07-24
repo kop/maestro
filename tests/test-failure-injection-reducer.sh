@@ -70,7 +70,7 @@ while IFS=$'\t' read -r case_id state category reads mutations events suppressed
   rows=$((rows + 1))
 done < "$fixture"
 
-[[ "$rows" -eq 103 ]] || fail "expected 103 failure-injection rows, got $rows"
+[[ "$rows" -eq 129 ]] || fail "expected 129 failure-injection rows, got $rows"
 
 # Fixture order and duplicate rows cannot affect the state-derived decision set.
 baseline=$(reduce_fixture_rows < "$fixture" | sort -u)
@@ -173,6 +173,40 @@ while IFS=$'\t' read -r case_id _ _ _ mutations _; do
 done < "$fixture"
 [[ "$timeout_deletion_rows" -eq 10 ]] ||
   fail "expected only ten ownership-proven timeout cleanup plans"
+
+pre_request_head=$(reduce_controller_state \
+  'surface=github;publication=pending;pr_head=stale;review_requested=absent')
+[[ "$pre_request_head" == *$'category\treview-stale-head'* &&
+   "$pre_request_head" != *$'journal_events\treview-input-stale'* ]] ||
+  fail "pre-request head movement did not exclusively use review-stale-head"
+
+post_request_head=$(reduce_controller_state \
+  'surface=review-publication;interval=before-github;review_requested=confirmed;reviewed_input=r1;fresh_input=r2;difference=head-sha;fresh_derivation=confirmed;worktree=owned')
+[[ "$post_request_head" == *$'category\treview-input-stale'* &&
+   "$post_request_head" != *$'journal_events\treview-stale-head'* ]] ||
+  fail "post-request head movement did not exclusively use review-input-stale"
+
+overlap_head=$(reduce_controller_state \
+  'surface=github;publication=pending;pr_head=stale;review_requested=confirmed')
+[[ "$overlap_head" != *$'category\treview-stale-head'* ]] ||
+  fail "review-stale-head remained available after review-requested"
+
+pre_request_input=$(reduce_controller_state \
+  'surface=review-publication;interval=before-github;review_requested=absent;reviewed_input=r1;fresh_input=r2;difference=head-sha;fresh_derivation=confirmed;worktree=owned')
+[[ "$pre_request_input" != *$'category\treview-input-stale'* &&
+   "$pre_request_input" != *$'journal_events\treview-input-stale'* ]] ||
+  fail "review-input-stale remained available before review-requested"
+
+shortcut_review=$(reduce_controller_state \
+  'surface=evidence-stage-lifecycle;phase=review;review_binding=exact;reconciliation_binding=unresolved;merge=absent')
+[[ "$shortcut_review" != *$'allowed_mutations\tpersist-review-request'* ]] ||
+  fail "stage lifecycle bypassed reservation/action-binding/marker review gates"
+
+shortcut_closeout=$(reduce_controller_state \
+  'surface=evidence-stage-lifecycle;phase=reconciliation;reconciliation_binding=exact;merge=observed')
+[[ "$shortcut_closeout" != *complete-implementation* &&
+   "$shortcut_closeout" != *close-symphony* ]] ||
+  fail "stage lifecycle bypassed evidenced reconciliation/closeout gates"
 
 combined_timeout=$(reduce_controller_state \
   'surface=validation;command=timed-out;owned_path=known;containment=proved;marker=match;action_identity=match;attachment=attached-worktree;git_metadata=match;contents=expected;attempts=exhausted;state_changed=false;exhaustion_event=absent;entity_uuid=issue-validation-attached;retry_action_identity=validation-action-attached;failure_category=validation-timeout;prior_phase=entity-executing;pause_resume_phase=entity-executing;pause_identity=retry-pause-v1:c34493f991967f277e52a49218b9f70d9317932a4b6e3428de48e26eea3efb3e')

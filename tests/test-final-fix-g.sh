@@ -12,8 +12,12 @@ linear=references/symphony/linear.md
 review=references/symphony/review.md
 review_skill=skills/symphony-review/SKILL.md
 reconcile=skills/symphony-reconcile/SKILL.md
+schema_helper=scripts/evidence-source-schema.py
 
 assert_file "$binding_fixture"
+assert_executable "$schema_helper"
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' EXIT
 expected_header=$'case_id\tsource_kind\tcanonical_criterion\tcanonical_requirement_template\tcanonical_binding_template\tbinding_state\tresolution_status\tpublishable\tstable_group'
 [[ "$(head -n 1 "$binding_fixture")" == "$expected_header" ]] ||
   fail "unexpected evidence requirement/binding fixture header"
@@ -37,12 +41,13 @@ while IFS=$'\t' read -r case_id source_kind canonical_criterion \
     awk '{ print $1 }')
   requirement_key="evidence-requirement-key-v1:$requirement_digest"
   locator_template=$(python3 -c \
-    'import json,sys; print(json.dumps(json.loads(sys.argv[1])[4], separators=(",", ":")))' \
+    'import json,sys; print(json.dumps(json.loads(sys.argv[1])[6], separators=(",", ":")))' \
     "$canonical_requirement")
   canonical_binding=${binding_template//@REQUIREMENT@/$requirement_key}
   canonical_binding=${canonical_binding//@CRITERION@/$criterion_key}
   canonical_binding=${canonical_binding//@SOURCE_KIND@/$source_kind}
   canonical_binding=${canonical_binding//@LOCATOR_TEMPLATE@/$locator_template}
+  canonical_binding=${canonical_binding//@RESOLUTION@/$resolution_status}
   binding_digest=$(printf '%s' "$canonical_binding" | sha256sum |
     awk '{ print $1 }')
   binding_revision="acceptance-evidence-binding-v1:$binding_digest"
@@ -87,8 +92,8 @@ import sys
 ) = sys.argv[1:]
 binding = json.loads(raw)
 template = json.loads(raw_template)
-if len(binding) != 10:
-    raise SystemExit(f"{case_id}: binding must have exactly 10 fields, got {len(binding)}")
+if len(binding) != 11:
+    raise SystemExit(f"{case_id}: binding must have exactly 11 fields, got {len(binding)}")
 expected_prefix = [
     "maestro-acceptance-evidence-binding-v1",
     criterion_key,
@@ -106,15 +111,17 @@ if any("${" in str(value) for value in binding[5]):
     raise SystemExit(f"{case_id}: resolved locator retains an unresolved template token")
 if state not in {"present", "missing", "unavailable"}:
     raise SystemExit(f"{case_id}: invalid finite observable state {state!r}")
-if binding[7] != state:
+if binding[7] != resolution:
+    raise SystemExit(f"{case_id}: canonical binding omits resolution outcome")
+if binding[8] != state:
     raise SystemExit(f"{case_id}: binding state field differs from fixture state")
 if state == "present":
-    if binding[8] in {"missing", "unavailable"} or binding[9] in {
+    if binding[9] in {"missing", "unavailable"} or binding[10] in {
         "missing",
         "unavailable",
     }:
         raise SystemExit(f"{case_id}: present binding uses a state sentinel")
-elif binding[8:] != [state, state]:
+elif binding[9:] != [state, state]:
     raise SystemExit(f"{case_id}: non-present binding lacks matching state sentinels")
 if resolution not in {"exact", "unresolved", "ambiguous"}:
     raise SystemExit(f"{case_id}: invalid resolution status {resolution!r}")
@@ -124,6 +131,43 @@ if resolution == "exact" and locator_unresolved:
 if resolution == "unresolved" and not locator_unresolved:
     raise SystemExit(f"{case_id}: unresolved resolution lacks an explicit sentinel")
 PY
+
+  binding_input="$tmp_dir/$case_id.json"
+  python3 - "$canonical_requirement" "$canonical_binding" > "$binding_input" <<'PY'
+import json
+import sys
+
+requirement = json.loads(sys.argv[1])
+binding = json.loads(sys.argv[2])
+json.dump(
+    {
+        "requirement": {
+            "criterion_key": requirement[1],
+            "required_outcome": requirement[2],
+            "evidence_stage": requirement[3],
+            "source_kind": requirement[4],
+            "provider_record_role": requirement[5],
+            "locator_template": requirement[6],
+        },
+        "resolved_locator": binding[5],
+        "binding_context_revision": binding[6],
+        "resolution_outcome": binding[7],
+        "evidence_state": binding[8],
+        "provider_record_id": binding[9],
+        "provider_revision": binding[10],
+    },
+    sys.stdout,
+    separators=(",", ":"),
+)
+PY
+  oracle_output=$("$schema_helper" --plugin-root . binding --input "$binding_input") ||
+    fail "$case_id was rejected by the plugin-owned evidence oracle"
+  oracle_canonical=$(awk -F'\t' '$1 == "canonical" { print $2 }' <<< "$oracle_output")
+  oracle_publishable=$(awk -F'\t' '$1 == "publishable" { print $2 }' <<< "$oracle_output")
+  [[ "$oracle_canonical" == "$canonical_binding" ]] ||
+    fail "$case_id fixture canonical binding differs from oracle"
+  [[ "$oracle_publishable" == "$publishable" ]] ||
+    fail "$case_id fixture publishability differs from oracle"
 
   source_kinds["$source_kind"]=1
   case_requirement["$case_id"]=$requirement_key
@@ -169,7 +213,7 @@ done
 baseline_check=${case_requirement[github_check_head1]}
 for changed_case in \
   github_check_semantics_changed \
-  github_check_template_changed \
+  github_check_stage_changed \
   github_check_selector_changed
 do
   [[ "$baseline_check" != "${case_requirement[$changed_case]}" ]] ||
@@ -179,7 +223,9 @@ done
 assert_contains "$linear" 'evidence_requirement_key'
 assert_contains "$linear" 'locator template'
 assert_contains "$linear" \
-  'current_implementation_issue.*current_linked_pr.*current_base.*current_head.*current_merge.*provider_record_role'
+  'current_implementation_issue.*current_linked_pr.*current_base.*current_head.*current_merge'
+assert_not_contains "$linear" '\$\{provider_record_role\}'
+assert_contains "$linear" 'provider_record_role.*static'
 assert_contains "$linear" \
   'approved contract.*never contain.*issue UUID.*PR native ID.*head SHA.*check-run ID.*comment ID.*artifact ID.*commit SHA'
 assert_contains "$core" 'maestro-acceptance-evidence-binding-v1'
@@ -218,7 +264,7 @@ assert_not_contains "$review_skill" \
 assert_contains "$review_skill" \
   'After confirmed transfer, review retains cleanup ownership and cleans on every exit'
 assert_contains "$review_skill" \
-  'Record.*review-stale-head.*only when'
+  'Reconciliation records.*review-stale-head.*only when'
 assert_contains "$review_skill" \
   'After review begins, every'
 assert_contains "$review_skill" \
@@ -228,6 +274,8 @@ assert_contains "$reconcile" 'review-input-stale.*new.*eligible'
 assert_file "$plugin_manifest"
 assert_contains "$plugin_manifest" 'review-source-requirements-v1.json'
 assert_contains "$plugin_manifest" 'scripts/review-source-closure.py'
+assert_contains "$plugin_manifest" 'evidence-source-schema-v1.json'
+assert_contains "$plugin_manifest" 'scripts/evidence-source-schema.py'
 assert_contains "$plugin_manifest" 'skills/symphony-review/SKILL.md'
 assert_contains "$plugin_manifest" 'agents/symphony-reviewer.md'
 assert_contains "$plugin_manifest" 'references/symphony/core.md'
@@ -274,6 +322,8 @@ mandatory = set(manifest["mandatory_plugin_sources"])
 required = {
     "review-source-requirements-v1.json",
     "scripts/review-source-closure.py",
+    "evidence-source-schema-v1.json",
+    "scripts/evidence-source-schema.py",
     "skills/symphony-review/SKILL.md",
     "agents/symphony-reviewer.md",
 } | manifest_dependencies
@@ -288,7 +338,9 @@ assert_contains "$core" \
 assert_contains "$reconcile" \
   'git rev-parse HEAD.*expected head SHA'
 assert_contains "$review_skill" \
-  'Before use.*revalidate.*ownership.*repository.*head'
+  'before use, revalidate'
+assert_contains "$review_skill" \
+  'repository identity.*detached attachment state'
 assert_contains "$reconcile" \
   '[Oo]wnership transfer occurs only after confirmed dispatch'
 assert_contains "$reconcile" \

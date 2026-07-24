@@ -112,18 +112,27 @@ continue reconciliation. The observation event never suppresses the later
 reconciliation attempt. Then:
 
 1. Inspect the final PR, diff, and merge SHA.
-2. Run `implementation-reconciler`.
-3. Validate the reconciler identity against the implementation issue UUID,
+2. Resolve exactly the evidence requirements whose `evidence_stage` is
+   `reconciliation` or `both`. A reconciliation-stage repository commit binds
+   `${current_merge}`; a review-stage repository commit bound `${current_head}`
+   before merge and is not reinterpreted. Require canonical
+   `resolution_outcome=exact` for every selected binding.
+3. Run `implementation-reconciler`.
+4. Validate the reconciler identity against the implementation issue UUID,
    contract revision, approved DAG revision, PR, and merge SHA; validate its
    verdict and complete acceptance-evidence table.
-4. Follow the verdict transition below.
+5. Follow the verdict transition below.
 
-Only verdict `complete`, with every acceptance criterion satisfied and evidenced,
+Only verdict `complete`, with every acceptance criterion satisfied and every
+post-merge `reconciliation`/`both` requirement exactly bound and evidenced,
 may append `Actual implementation`, confirmed deviations and acceptance evidence,
 apply bounded downstream updates, confirm required follow-up issues, record the
 merge-reconciliation action identity as `merge-reconciled`, move the issue to an
 unambiguous existing native completed status, apply its completion phase, or
 unlock dependants.
+An unresolved or ambiguous post-merge binding keeps `merge-reconciled`,
+implementation completion, dependant unlock, and Symphony closeout blocked and
+follows bounded recovery.
 
 For `human-decision`, append the observed merge and `human-decision-required`
 with the decision evidence, affected subgraph, and prior/resume phase. Use

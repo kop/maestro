@@ -56,11 +56,19 @@ rule symphony-status-consume-event-issue-dispatched | when cursor-delegation-is-
 
 rule symphony-status-consume-event-review-requested | when canonical-review-input-revision-is-durably-confirmed | consume event `review-requested` | next review-revision-eligible | choice none
 
+rule symphony-status-consume-event-review-worktree-reserved | when canonical-preclosure-review-reservation-is-confirmed | consume event `review-worktree-reserved` | next reservation-authorized | choice none
+
+rule symphony-status-consume-event-review-worktree-action-bound | when reservation-to-final-review-action-binding-is-confirmed | consume event `review-worktree-action-bound` | next action-binding-confirmed | choice none
+
 rule symphony-status-consume-event-review-recorded | when canonical-exact-head-and-input-revision-review-record-is-confirmed | consume event `review-recorded` | next review-gate-recorded | choice none
 
-rule symphony-status-consume-event-review-stale-head | when remote-pr-head-no-longer-matches-reviewed-head | consume event `review-stale-head` | next review-new-head | choice none
+rule symphony-status-consume-event-review-stale-head | when remote-pr-head-changed-and-review-requested-is-absent | consume event `review-stale-head` | next review-new-head | choice none
 
-rule symphony-status-consume-event-review-input-stale | when current-review-input-differs-from-reviewed-input | consume event `review-input-stale` | next new-review-input-eligible | choice none
+rule symphony-status-consume-event-review-input-stale | when full-input-changed-or-underivable-and-review-requested-is-confirmed | consume event `review-input-stale` | next new-review-input-eligible | choice none
+
+An already-published GitHub record referenced by `review-input-stale` is
+historical and cannot satisfy the current review/pass gate; report the new
+eligible input or underivable-input recovery and the suppressed Linear follow-up.
 
 rule symphony-status-consume-event-merge-observed | when github-merge-sha-is-freshly-confirmed | consume event `merge-observed` | next merge-reconciliation-pending | choice none
 

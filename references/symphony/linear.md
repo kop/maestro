@@ -114,7 +114,9 @@ Maestro-DAG-Node-Creation-Identity: <Symphony UUID + approved DAG revision + fix
   Required evidence:
   - evidence_requirement_key: evidence-requirement-key-v1:<digest>
     Required outcome/evidence role:
+    evidence_stage: review | reconciliation | both
     Source kind:
+    provider_record_role:
     Canonical locator template:
     Static selectors:
 ## Validation
@@ -143,39 +145,49 @@ Canonicalize each criterion as
 `["maestro-criterion-key-v1","<fixed DAG node key>","<normalized criterion descriptor>"]`
 and digest it as `criterion-v1:<lowercase SHA-256 hex>`. Canonicalize each
 evidence requirement as
-`["maestro-evidence-requirement-key-v1","<criterion key>","<normalized required outcome/evidence role>","<finite source kind>",<canonical locator template>]`
+`["maestro-evidence-requirement-key-v1","<criterion key>","<normalized required outcome/evidence role>","<evidence stage>","<finite source kind>","<static provider record role>",<canonical locator template>]`
 and digest it as `evidence-requirement-key-v1:<lowercase SHA-256 hex>`. Keys are
 derived from the approved candidate contract, never selected by a model.
-Changing criterion semantics, the required outcome/evidence role, source kind,
-locator template, or a static selector changes the issue contract revision and
-requirement key. Resolving a declared binding token later does not.
+`evidence_stage` is exactly `review`, `reconciliation`, or `both`. Changing
+criterion semantics, the required outcome/evidence role, evidence stage, source
+kind, static `provider_record_role`, locator template, or any other static
+selector changes the issue contract revision and requirement key. Resolving a
+declared binding token later does not.
 
 Acceptance-evidence source kinds are exactly `linear-issue`, `linear-comment`, `linear-document`, `github-pr`, `github-comment`, `github-review`, `github-check-run`, `github-artifact`, `repository-file`, `repository-commit`, and `manual-validation`.
 Locator templates start with `locator-template-v1`. The exhaustive binding-token
-vocabulary is `${current_implementation_issue}`, `${current_linked_pr}`, `${current_base}`, `${current_head}`, `${current_merge}`, and `${provider_record_role}`.
+vocabulary is `${current_implementation_issue}`, `${current_linked_pr}`, `${current_base}`, `${current_head}`, and `${current_merge}`.
+`provider_record_role` is always a static plan-time selector; it is never a
+runtime token. Missing, unknown, or source-kind-invalid roles fail contract
+validation.
 Every other template value is a normalized static selector approved in the
 contract: repository identity, field/section key, record marker/role, exact
 check name, exact workflow/artifact name, exact repository-relative path, or
 commit role. Templates are:
 
-- Linear issue: `["locator-template-v1","linear-issue","${current_implementation_issue}","<field or section key>"]`.
-- Linear comment: `["locator-template-v1","linear-comment","${current_implementation_issue}","${provider_record_role}","<record marker>"]`.
-- Linear document: `["locator-template-v1","linear-document","${current_implementation_issue}","${provider_record_role}","<document role>","<section key>"]`.
-- GitHub PR: `["locator-template-v1","github-pr","<owner/repository>","${current_linked_pr}","<field key>"]`.
-- GitHub comment or review: `["locator-template-v1","github-comment"|"github-review","<owner/repository>","${current_linked_pr}","${provider_record_role}","<record marker>"]`.
-- GitHub check run: `["locator-template-v1","github-check-run","<owner/repository>","${current_head}","<exact check name>"]`.
-- GitHub artifact: `["locator-template-v1","github-artifact","<owner/repository>","${current_head}","<exact workflow name>","<exact artifact name>"]`.
-- Repository file: `["locator-template-v1","repository-file","<owner/repository>","${current_head}","<exact repository-relative path>"]`.
-- Repository commit: `["locator-template-v1","repository-commit","<owner/repository>","${current_merge}","<exact commit role>"]`.
-- Durable manual validation: `["locator-template-v1","manual-validation","${current_implementation_issue}","${provider_record_role}","<record marker>"]`.
+- Linear issue/comment/document: `["locator-template-v1","<linear kind>","${current_implementation_issue}","<static provider record role>","<schema-defined static selectors>"]`.
+- GitHub PR/comment/review: `["locator-template-v1","<GitHub kind>","<owner/repository>","${current_linked_pr}","<static provider record role>","<schema-defined static selectors>"]`.
+- GitHub check run: `["locator-template-v1","github-check-run","<owner/repository>","${current_head}","<static provider record role>","<exact check name>"]`; `${current_base}` is invalid.
+- GitHub artifact: `["locator-template-v1","github-artifact","<owner/repository>","${current_head}","<static provider record role>","<exact workflow name>","<exact artifact name>"]`.
+- Repository file: `["locator-template-v1","repository-file","<owner/repository>","${current_head}","<static provider record role>","<exact repository-relative path>"]`.
+- Review-stage repository commit: `["locator-template-v1","repository-commit","<owner/repository>","${current_head}","<static provider record role>"]`.
+- Reconciliation-stage repository commit: `["locator-template-v1","repository-commit","<owner/repository>","${current_merge}","<static provider record role>"]`.
+- Durable manual validation: `["locator-template-v1","manual-validation","${current_implementation_issue}","<static provider record role>","<record marker>"]`.
+
+The plugin-owned `evidence-source-schema-v1.json` and
+`scripts/evidence-source-schema.py` are authoritative for every permitted
+stage/kind combination, role, template/token/selector slot, and provider locator
+shape. `both` is valid only when the exact same source-kind template is
+resolvable in both review and reconciliation. Repository-commit has distinct
+review/head and reconciliation/merge variants, so `both` is invalid for it.
 
 The approved contract must never contain a future native issue UUID, PR native ID, head SHA, check-run ID, comment ID, artifact ID, or implementation commit SHA.
 Those runtime values are resolved only through the declared tokens. An untyped URL, undeclared token, or free-form evidence reference is never revision authority.
 At runtime, resolution replaces `locator-template-v1` with
 `resolved-locator-v1` and replaces each declared token one-for-one without
-changing tuple arity, order, or static selectors. `${provider_record_role}`
-resolves to the approved matching role or record class, not the provider-native
-record ID; the runtime binding stores that ID separately.
+changing tuple arity, order, or static selectors. The static
+`provider_record_role` is repeated unchanged; the runtime binding stores the
+matched provider-native record ID separately.
 
 ## Cursor repository routing
 

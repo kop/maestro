@@ -179,8 +179,129 @@ reduce_controller_state() {
     predicate["$key"]=$value
   done
 
-  if [[ "${predicate[surface]:-}" == "review-publication" &&
-        "${predicate[fresh_derivation]:-}" == "confirmed" &&
+  if [[ "${predicate[surface]:-}" == "review-preparation" &&
+        "${predicate[reservation]:-}" == "confirmed" &&
+        "${predicate[worktree]:-}" == "absent" &&
+        "${predicate[ownership]:-}" == "reconciler" ]]; then
+    emit_action_plan none \
+      review-worktree-reservation,cleanup-ledger,repository-identity,expected-head \
+      create-owned-worktree none \
+      review-source-closure,action-binding,review-requested,review-dispatch,ownership-transfer \
+      reservation-worktree-create
+  elif [[ "${predicate[surface]:-}" == "review-preparation" &&
+          "${predicate[reservation]:-}" == "confirmed" &&
+          "${predicate[worktree]:-}" == "attached" &&
+          "${predicate[closure]:-}" == "absent" &&
+          "${predicate[marker]:-}" == "reservation-only" &&
+          "${predicate[ownership]:-}" == "reconciler" ]]; then
+    emit_action_plan none \
+      review-worktree-reservation,cleanup-ledger,ownership-marker,repository-identity,expected-head,git-worktree-metadata \
+      derive-review-source-closure none \
+      action-binding,review-requested,review-dispatch,ownership-transfer \
+      reservation-source-closure
+  elif [[ "${predicate[surface]:-}" == "review-preparation" &&
+          "${predicate[reservation]:-}" == "confirmed" &&
+          "${predicate[worktree]:-}" == "attached" &&
+          "${predicate[closure]:-}" == "derived" &&
+          "${predicate[action_binding]:-}" == "absent" &&
+          "${predicate[journal_binding]:-}" == "absent" &&
+          "${predicate[marker]:-}" == "reservation-only" &&
+          "${predicate[ownership]:-}" == "reconciler" ]]; then
+    emit_action_plan none \
+      review-worktree-reservation,review-source-closure,review-input,review-action-identity,ownership-marker \
+      append-confirm-review-worktree-action-binding review-worktree-action-bound \
+      update-marker,review-requested,review-dispatch,ownership-transfer \
+      reservation-action-binding-append
+  elif [[ "${predicate[surface]:-}" == "review-preparation" &&
+          "${predicate[reservation]:-}" == "confirmed" &&
+          "${predicate[worktree]:-}" == "attached" &&
+          "${predicate[closure]:-}" == "derived" &&
+          "${predicate[action_binding]:-}" == "confirmed" &&
+          "${predicate[journal_binding]:-}" == "match" &&
+          "${predicate[marker]:-}" == "reservation-only" &&
+          "${predicate[ownership]:-}" == "reconciler" ]]; then
+    emit_action_plan none \
+      review-worktree-reservation,review-source-closure,review-action-binding,ownership-marker \
+      update-marker-bound-action none \
+      review-requested,review-dispatch,ownership-transfer \
+      reservation-marker-update
+  elif [[ "${predicate[surface]:-}" == "review-preparation" &&
+          "${predicate[reservation]:-}" == "confirmed" &&
+          "${predicate[worktree]:-}" == "attached" &&
+          "${predicate[closure]:-}" == "derived" &&
+          "${predicate[action_binding]:-}" == "absent" &&
+          "${predicate[journal_binding]:-}" == "absent" &&
+          "${predicate[marker]:-}" == "bound-action" &&
+          "${predicate[ownership]:-}" == "reconciler" ]]; then
+    emit_action_plan mutation-ambiguous \
+      review-worktree-reservation,review-source-closure,review-action-binding,ownership-marker \
+      none action-failed,cleanup-failed \
+      review-requested,review-dispatch,ownership-transfer,filesystem-delete,git-worktree-remove \
+      reservation-binding-mismatch-cleanup-debt
+  elif [[ "${predicate[surface]:-}" == "review-preparation" &&
+          "${predicate[reservation]:-}" == "confirmed" &&
+          "${predicate[worktree]:-}" == "attached" &&
+          "${predicate[closure]:-}" == "derived" &&
+          "${predicate[action_binding]:-}" == "confirmed" &&
+          "${predicate[journal_binding]:-}" == "match" &&
+          "${predicate[marker]:-}" == "bound-match" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[dispatch]:-}" == "absent" &&
+          "${predicate[ownership]:-}" == "reconciler" ]]; then
+    emit_action_plan none \
+      review-worktree-reservation,review-action-binding,ownership-marker,review-requested \
+      dispatch-review none \
+      ownership-transfer,duplicate-dispatch review-dispatch-eligible
+  elif [[ "${predicate[surface]:-}" == "review-preparation" &&
+          "${predicate[reservation]:-}" == "confirmed" &&
+          "${predicate[worktree]:-}" == "attached" &&
+          "${predicate[closure]:-}" == "derived" &&
+          "${predicate[action_binding]:-}" == "confirmed" &&
+          "${predicate[journal_binding]:-}" == "match" &&
+          "${predicate[marker]:-}" == "bound-match" &&
+          "${predicate[request_event]:-}" == "recorded" &&
+          "${predicate[dispatch]:-}" == "confirmed" &&
+          "${predicate[ownership]:-}" == "reconciler" ]]; then
+    emit_action_plan none \
+      review-worktree-reservation,review-action-binding,ownership-marker,review-requested,review-dispatch \
+      transfer-review-worktree-ownership none \
+      reconciliation-cleanup,duplicate-dispatch review-dispatched
+  elif [[ "${predicate[surface]:-}" == "review-publication" &&
+          "${predicate[interval]:-}" == "after-github" &&
+          "${predicate[github_record]:-}" == "confirmed" &&
+          "${predicate[fresh_derivation]:-}" == "confirmed" &&
+          "${predicate[reviewed_input]:-}" != "${predicate[fresh_input]:-}" &&
+          "${predicate[worktree]:-}" == "owned" ]]; then
+    emit_action_plan review-input-stale \
+      confirmed-github-record,fresh-review-context,evidence-template-bindings,acceptance-evidence-manifest,review-source-closure,capability-state,decision-resolutions,review-input \
+      cleanup-owned-worktree review-input-stale \
+      linear-cursor-follow-up,github-record-satisfies-current,review-recorded,merge-ready \
+      new-review-input-eligible-github-record-historical
+  elif [[ "${predicate[surface]:-}" == "review-publication" &&
+          "${predicate[interval]:-}" == "after-github" &&
+          "${predicate[github_record]:-}" == "confirmed" &&
+          "${predicate[fresh_derivation]:-}" == "failed" &&
+          "${predicate[worktree]:-}" == "owned" ]]; then
+    emit_action_plan review-input-stale \
+      confirmed-github-record,fresh-review-context,evidence-template-bindings,acceptance-evidence-manifest,review-source-closure,capability-state,decision-resolutions,review-input \
+      cleanup-owned-worktree review-input-stale \
+      linear-cursor-follow-up,github-record-satisfies-current,review-recorded,merge-ready \
+      review-input-derivation-recovery-github-record-historical
+  elif [[ "${predicate[surface]:-}" == "review-publication" &&
+          "${predicate[interval]:-}" == "after-github" &&
+          "${predicate[github_record]:-}" == "confirmed" &&
+          "${predicate[fresh_derivation]:-}" == "confirmed" &&
+          "${predicate[reviewed_input]:-}" == "${predicate[fresh_input]:-}" &&
+          "${predicate[linear_record]:-}" == "absent" &&
+          "${predicate[worktree]:-}" == "owned" ]]; then
+    emit_action_plan none \
+      confirmed-github-record,fresh-review-context,evidence-template-bindings,acceptance-evidence-manifest,review-source-closure,capability-state,decision-resolutions,review-input,linear-publication-identity \
+      publish-or-recover-linear-follow-up review-recorded \
+      duplicate-linear-follow-up current-review-publication-complete
+  elif [[ "${predicate[surface]:-}" == "review-publication" &&
+          "${predicate[interval]:-}" == "before-github" &&
+          "${predicate[review_requested]:-}" == "confirmed" &&
+          "${predicate[fresh_derivation]:-}" == "confirmed" &&
         "${predicate[reviewed_input]:-}" != "${predicate[fresh_input]:-}" &&
         "${predicate[worktree]:-}" == "owned" ]]; then
     emit_action_plan review-input-stale \
@@ -189,6 +310,8 @@ reduce_controller_state() {
       github-review-publication,linear-cursor-follow-up,review-recorded,merge-ready \
       new-review-input-eligible
   elif [[ "${predicate[surface]:-}" == "review-publication" &&
+          "${predicate[interval]:-}" == "before-github" &&
+          "${predicate[review_requested]:-}" == "confirmed" &&
           "${predicate[fresh_derivation]:-}" == "failed" &&
           "${predicate[worktree]:-}" == "owned" ]]; then
     emit_action_plan observation-incomplete \
@@ -572,7 +695,8 @@ reduce_controller_state() {
       repeat-create,duplicate-follow-up resolve-linear-cursor-follow-up
   elif [[ "${predicate[surface]:-}" == "github" &&
           "${predicate[publication]:-}" == "pending" &&
-          "${predicate[pr_head]:-}" == "stale" ]]; then
+          "${predicate[pr_head]:-}" == "stale" &&
+          "${predicate[review_requested]:-}" == "absent" ]]; then
     emit_action_plan review-stale-head github-pr-head,linear-contract-dag \
       cleanup-owned-resource review-stale-head review-publication review-new-head
   elif [[ "${predicate[surface]:-}" == "github" &&
@@ -719,6 +843,52 @@ reduce_controller_state() {
     emit_action_plan none decision-resolved,native-phase,affected-subgraph \
       remove-pause-label,resume-recorded-phase none \
       duplicate-decision-resolved resumed-recorded-phase
+  elif [[ "${predicate[surface]:-}" == "evidence-stage-lifecycle" &&
+          "${predicate[phase]:-}" == "review" &&
+          "${predicate[reservation]:-}" == "confirmed" &&
+          "${predicate[action_binding]:-}" == "confirmed" &&
+          "${predicate[journal_binding]:-}" == "match" &&
+          "${predicate[marker]:-}" == "bound-match" &&
+          "${predicate[ownership]:-}" == "reconciler" &&
+          "${predicate[review_input]:-}" == "exact" &&
+          "${predicate[request_event]:-}" == "absent" &&
+          "${predicate[review_binding]:-}" == "exact" &&
+          "${predicate[reconciliation_binding]:-}" == "unresolved" &&
+          "${predicate[merge]:-}" == "absent" ]]; then
+    emit_action_plan none \
+      review-worktree-reservation,review-action-binding,ownership-marker,review-input,review-requirements,review-bindings \
+      persist-review-request review-requested \
+      reconciliation-binding-resolution,merge-reconciled,implementation-completion,symphony-closeout \
+      merge-ready-after-review
+  elif [[ "${predicate[surface]:-}" == "evidence-stage-lifecycle" &&
+          "${predicate[phase]:-}" == "reconciliation" &&
+          "${predicate[review_requested]:-}" == "confirmed" &&
+          "${predicate[review_recorded]:-}" == "pass" &&
+          "${predicate[review_binding]:-}" == "exact" &&
+          "${predicate[reconciliation_binding]:-}" == "unresolved" &&
+          "${predicate[reconciliation_evidence]:-}" == "incomplete" &&
+          "${predicate[merge]:-}" == "observed" ]]; then
+    emit_action_plan observation-incomplete \
+      review-requested,review-recorded,merge-observation,reconciliation-requirements,reconciliation-bindings,reconciliation-evidence \
+      none action-failed \
+      merge-reconciled,implementation-completion,symphony-closeout \
+      postmerge-evidence-recovery
+  elif [[ "${predicate[surface]:-}" == "evidence-stage-lifecycle" &&
+          "${predicate[phase]:-}" == "reconciliation" &&
+          "${predicate[review_requested]:-}" == "confirmed" &&
+          "${predicate[review_recorded]:-}" == "pass" &&
+          "${predicate[review_binding]:-}" == "exact" &&
+          "${predicate[reconciliation_binding]:-}" == "exact" &&
+          "${predicate[reconciliation_evidence]:-}" == "complete" &&
+          "${predicate[reconciliation_verdict]:-}" == "complete" &&
+          "${predicate[reconciliation_action_identity]:-}" == "confirmed" &&
+          "${predicate[implementation_completion]:-}" == "eligible" &&
+          "${predicate[symphony_closeout]:-}" == "eligible" &&
+          "${predicate[merge]:-}" == "observed" ]]; then
+    emit_action_plan none \
+      review-requested,review-recorded,merge-observation,reconciliation-requirements,reconciliation-bindings,reconciliation-evidence,reconciliation-action-identity \
+      reconcile-merge,complete-implementation,update-downstream,close-symphony \
+      merge-reconciled none symphony-closed
   elif [[ "${predicate[surface]:-}" == "reconciler" &&
           "${predicate[merge]:-}" == "observed" &&
           "${predicate[merge_reconciled]:-}" == "recorded" &&

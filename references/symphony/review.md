@@ -37,9 +37,11 @@ fixed `review-source-closure-v1` algorithm over only declared exact source paths
 and the plugin-owned manifest at its fixed plugin-relative path.
 Use the fully qualified roster agent identifier as a lens stable key, derive
 every validator key from its finite kind and normalized command, and resolve
-exactly one typed runtime binding for every contract
-`evidence_requirement_key`. Resolve every locator template only from freshly
-confirmed native state; zero or multiple matches are non-publishable.
+exactly one typed runtime binding for every contract requirement whose
+`evidence_stage` is `review` or `both`. A reconciliation-only unresolved binding
+cannot block pre-merge review. Resolve every locator template only from freshly
+confirmed native state; only canonical `resolution_outcome=exact` entries may
+enter the publishable manifest, and zero or multiple matches are non-publishable.
 The manifest contains every required lens and validator with an explicit
 `present`, `missing`, or `unavailable` state and the matching derived evidence
 revision or the literal `missing`/`unavailable` sentinel. Free-form keys,
@@ -53,29 +55,38 @@ canonical `review-requested` record is confirmed.
 
 ## Owned worktree protocol
 
-Reconciliation prepares one owned isolated detached worktree before source
-closure or `review-requested`: it confirms repository/PR/base/head identity,
-creates the ledger/marker, verifies containment and attachment, verifies the
-GitHub repository identity and exact detached HEAD, then derives repository
-closure from that root. Review accepts only that exact ledger entry after a
-confirmed cleanup-ownership transfer. Before any use it revalidates marker,
-repository, `git rev-parse HEAD`, detached state, and clean tracked/staged state.
-If dispatch fails before transfer, reconciliation retains ownership and performs
-guarded cleanup. If dispatch succeeds, review owns cleanup on every exit.
+Reconciliation derives the review worktree reservation identity from only the
+pre-closure context and confirms it before preparing one owned isolated detached
+worktree. The initial ledger and marker contain that reservation identity, not a
+future review action. This reservation identity authorizes exact-head creation,
+closure derivation, recovery, and guarded cleanup before an action identity
+exists.
+
+After closure and the final review action are derived, reconciliation confirms
+the durable reservation-to-action binding, atomically updates the marker with
+the bound action identity, and verifies the journal/marker pair before
+`review-requested`, dispatch, or cleanup-ownership transfer. A marker claiming a
+binding absent from the journal fails closed and is not deleted. Review accepts
+only the exact ledger entry after confirmed dispatch and one-way cleanup
+ownership transfer. Before any use it revalidates reservation, action binding,
+marker, repository, `git rev-parse HEAD`, detached state, and phase-appropriate
+worktree state. If dispatch is absent, reconciliation retains ownership.
 
 Run all commands with the transferred worktree as the exact working directory,
 apply explicit timeouts, and compare tracked/staged changes before and after
 validation.
 
 Every cleanup-ledger entry records the repository, canonical owned path, marker,
-expected action identity, and explicit attachment state. Cleanup branches on
-that recorded state:
+reservation identity, optional confirmed action binding, and explicit
+attachment state. Cleanup branches on that recorded state:
 
-- `attached-worktree` requires a matching marker and expected action identity,
+- `attached-worktree` before binding requires a matching reservation marker;
+  after binding it requires both the reservation and bound action identity,
   canonical-path containment, and Git worktree metadata matching the expected
   repository and canonical path. Remove through Git first, then remove only
   expected owned transient artifacts.
-- `reserved-unattached` requires a matching marker and expected action identity,
+- `reserved-unattached` requires a matching reservation marker (plus the bound
+  action only when that binding is confirmed),
   canonical-path containment, a fresh proof that attachment state is false, and
   proof that no repository/worktree metadata, checkout, unexpected file, or
   unexpected contents exists. Remove only the known empty reservation and marker
@@ -86,10 +97,14 @@ reservations. Marker mismatch, unexpected contents, ambiguous attachment,
 containment failure, or Git metadata mismatch emits `cleanup-failed`, retains the
 exact owned path, and permits retry only after a new safe observation.
 
-Unexpected tracked changes invalidate evidence that depends on them. Record the
-observation, publish no patch, and discard the worktree. Build caches, screenshots,
-reports, and other transient validation artifacts are allowed only inside the
-owned review directory or worktree and are deleted afterward.
+At `pre-review`, require a fully clean worktree. At `pre-publication`, exact
+head remains mandatory and every tracked, staged, symlink, or submodule mutation
+fails closed. An untracked regular cache/report artifact is safe only when
+the descriptor explicitly declares all implicit repository sources—even with no
+validators—and its path neither equals, aliases, contains, is contained by, nor shadows any declared
+plugin/policy/repository/config/instruction source path. Safe artifacts do not
+change closure revision and are removed only by guarded owned-worktree cleanup;
+never run broad `git clean` or mutate the checkout merely to pass validation.
 
 ## Required review lenses
 
@@ -226,6 +241,17 @@ after an ambiguous response. The comment links exactly one confirmed canonical G
 follow-up.
 
 The Linear follow-up publication identity repeats the complete review context, exact review input revision, Review PR action identity, and `linear-cursor-follow-up` channel.
+
+After the canonical GitHub record is confirmed and immediately before any
+Linear `@Cursor` follow-up, freshly re-read/rebind/rederive the complete current
+review input again. Require canonical byte equality with the reviewed and
+GitHub-published revision. A changed or underivable input suppresses Linear and
+appends exactly one `review-input-stale` that references the already-published
+GitHub record plus old/new or `underivable` revision. The GitHub record remains
+historical and cannot satisfy the current Maestro pass gate. Guarded cleanup
+runs; a derivable new input becomes eligible and an underivable input follows
+bounded recovery. For unchanged input, search and publish or recover exactly one
+canonical Linear follow-up.
 
 Use the actual PR, SHA, review link, and consolidated outcomes. Do not mention
 `@Cursor` for a pure human decision unless Cursor has a concrete implementation

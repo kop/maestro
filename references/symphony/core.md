@@ -101,6 +101,8 @@ Control contract revision: `symphony-control-v1`
 | Create candidate issue | Symphony UUID + approved DAG revision + fixed node key |
 | Create dependency edge | Symphony UUID + approved DAG revision + prerequisite node key + dependant node key + `blockedBy` |
 | Delegate issue | Linear issue UUID + contract revision + Cursor integration ID |
+| Reserve review worktree | Symphony UUID + implementation issue UUID + repository native identity + PR native ID + base/head SHAs + contract/DAG/policy revisions |
+| Bind review reservation | Review worktree reservation identity + final Review PR action identity |
 | Review PR | Symphony UUID + implementation issue UUID + GitHub PR native ID + base SHA + head SHA + contract revision + DAG revision + review-policy revision + review input revision |
 | Reconcile merge | Linear issue UUID + merge SHA |
 | Update downstream issue | Downstream UUID + source merge SHA + target contract revision |
@@ -126,8 +128,9 @@ SHA-256, and lowercase-hex rules.
 ### Review source closure
 
 The complete source descriptor is fixed as `review-source-closure-v1`. Its
-caller-authored fields are exactly `selected_lenses`, `policy_sources`, and
-`validators`; a caller cannot supply plugin authority paths. The plugin-owned manifest is fixed at `review-source-requirements-v1.json` relative to the
+caller-authored fields are exactly `selected_lenses`, `repository_sources`,
+`policy_sources`, `implicit_sources_declared`, and `validators`; a caller cannot
+supply plugin authority paths. The plugin-owned manifest is fixed at `review-source-requirements-v1.json` relative to the
 confirmed plugin root. The executable loads only that path and rejects a
 substituted requirements file.
 
@@ -139,8 +142,12 @@ lenses is authoritative. Unknown lenses, missing files, extra caller-authored
 behavior-authority paths, or an incomplete manifest fail closed. Every required
 file is hashed by exact bytes, including the manifest and executable.
 
-Repository instructions and every other issue/review-policy input are explicit
-repository-relative `policy_sources`. Each validator declares one finite kind,
+Every repository instruction or repository-backed evidence path is an explicit
+repository-relative `repository_source`. Every issue/review-policy input is an
+explicit repository-relative `policy_source`. The descriptor must assert
+`implicit_sources_declared=true` even when its validator list is empty; omission
+or `false` fails closed instead of vacuously proving artifact safety. Each
+validator declares one finite kind,
 its normalized exact command or inspection descriptor, an explicit ordered
 configuration-source path list (including an explicit empty list), the assertion
 that all implicit sources are declared, and capability state/name/version.
@@ -159,17 +166,32 @@ Resolve plugin paths from the confirmed plugin root. Plugin hashing does not
 require or consult Git metadata. Resolve repository/policy paths only from an
 owned detached worktree whose confirmed GitHub `owner/repository` identity and
 `git rev-parse HEAD` exactly equal the expected repository and head SHA. Reject
-a stale, unrelated, dirty, non-root, attached-branch, or unverifiable root.
+a stale, unrelated, non-root, attached-branch, or unverifiable root. The oracle
+requires one finite phase:
+
+- `pre-review` requires the exact-head worktree to be fully clean.
+- `pre-publication` rejects every tracked, staged, symlink, and submodule
+  mutation. It permits an untracked regular validation artifact only when the
+  descriptor explicitly proves implicit source discovery is forbidden and the
+  artifact is path-disjoint from every declared repository evidence,
+  policy/config, or instruction source: it may not equal, alias, contain, be
+  contained by, or shadow one.
+
+Safe untracked artifacts do not enter or change the closure revision and remain
+disposable until guarded owned-worktree cleanup. The oracle never runs broad
+`git clean`, removes an artifact, or mutates the checkout to pass validation.
 For each exact path, hash exact file bytes with SHA-256. Record
-`["<plugin-source|policy-source|validator-config>","<normalized path>","present","sha256:<digest>"]`
+`["<plugin-source|repository-source|policy-source|validator-config>","<normalized path>","present","sha256:<digest>"]`
 or use the exact state/revision pairs `"missing","missing"` and
 `"unavailable","unavailable"`.
 
 Canonicalize and sort source entries and validators, then serialize
-`["review-source-closure-v1","<plugin-owned requirements exact-byte revision>",["repository-binding-v1","<owner/repository>","<expected head SHA>"],[<selected lenses>],[<plugin sources>],[<policy sources>],[<validator descriptors>]]`.
+`["review-source-closure-v1","<plugin-owned requirements exact-byte revision>",["repository-binding-v1","<owner/repository>","<expected head SHA>"],[<selected lenses>],[<plugin sources>],[<repository sources>],[<policy sources>],[<validator descriptors>]]`.
 Its revision is `review-source-closure-v1:<lowercase SHA-256 hex>`. The executable
 oracle is `scripts/review-source-closure.py`; ordinary operation cannot pass a
 requirements path and must pass the expected repository identity and head SHA.
+It must also pass `--phase pre-review` before review and
+`--phase pre-publication` at each publication gate.
 If a validator depends on implicit source closure that is not explicitly listed,
 append `action-failed`: publish nothing and use bounded recovery.
 The controller never guesses a path.
@@ -177,10 +199,14 @@ The controller never guesses a path.
 ### Acceptance-evidence manifest
 
 Read the exact plan-time evidence-requirement contract defined by the Linear
-protocol. For every `evidence_requirement_key`, freshly resolve its finite
+protocol and mechanically validate it with the plugin-owned
+`evidence-source-schema-v1.json` through
+`scripts/evidence-source-schema.py`. Pre-merge review selects only `review` and
+`both`; post-merge reconciliation selects only `reconciliation` and `both`.
+For every selected `evidence_requirement_key`, freshly resolve its finite
 locator template against the current implementation issue, linked PR, base,
-head, merge, and provider-record role bindings. Create exactly one runtime
-binding entry, sorted by canonical requirement key:
+head, or merge. Create exactly one runtime binding entry, sorted by canonical
+requirement key:
 
 Canonicalize the binding context as
 `["maestro-evidence-binding-context-v1","<Symphony UUID>","<implementation issue UUID or unresolved>","<owner/repository>","<linked PR native ID or unresolved>","<base SHA or unresolved>","<head SHA or unresolved>","<merge SHA or unresolved>",[[<declared token>,<exact resolved value or unresolved>],...]]`
@@ -189,11 +215,11 @@ and digest it as
 complete and sorted by token; no undeclared runtime value enters it.
 
 ```text
-["maestro-acceptance-evidence-binding-v1","<criterion key>","<evidence requirement key>","<source kind>",<approved locator template>,<exact resolved provider locator>,"<binding context revision>","present"|"missing"|"unavailable","<provider-native record identity or sentinel>","<provider revision/content digest or sentinel>"]
+["maestro-acceptance-evidence-binding-v1","<criterion key>","<evidence requirement key>","<source kind>",<approved locator template>,<exact resolved provider locator>,"<binding context revision>","exact"|"unresolved"|"ambiguous","present"|"missing"|"unavailable","<provider-native record identity or sentinel>","<provider revision/content digest or sentinel>"]
 ```
 
 The binding context revision covers the current Symphony/implementation/PR,
-repository, base, head, merge, and provider-role resolution context. For
+repository, base, head, and merge resolution context. For
 `present`, both record identity and provider revision or exact content digest
 are required. For `missing` or `unavailable`, retain the approved requirement
 key and template, use an explicit `unresolved` token where no runtime value yet
@@ -201,16 +227,19 @@ exists, and use the matching state sentinel for provider identity/revision.
 The resolved locator is the template with `locator-template-v1` replaced by
 `resolved-locator-v1` and every declared token replaced one-for-one in the same
 position; its arity and all static selectors are unchanged.
-`${provider_record_role}` resolves to the contract-declared provider role or
-record class used for matching, while the separate provider-native identity
-field records the matched record ID.
+The source-kind schema requires the static plan-time `provider_record_role` to
+repeat unchanged in the template and resolved locator, while the separate
+provider-native identity field records the matched record ID.
 The observable-state field is finite: only `present`, `missing`, or
-`unavailable` is canonical. Resolution outcome is separately one of `exact`,
-`unresolved`, or `ambiguous`; it never occupies the observable-state field.
+`unavailable` is canonical. Canonical `resolution_outcome` is separately one of
+`exact`, `unresolved`, or `ambiguous`; it is part of the binding entry and
+digest and never occupies the observable-state field. Otherwise identical
+entries with different resolution outcomes have different revisions.
 An unresolved token uses a `missing` candidate entry with matching sentinels;
 multiple matches use an `unavailable` candidate entry with matching sentinels.
-An unresolved or ambiguous resolution is non-publishable and cannot enter a
-persisted review request.
+Only `exact` entries may enter a publishable stage manifest. An unresolved or
+ambiguous resolution is non-publishable, remains a durable observable recovery state, and cannot
+enter a persisted review request or reconciliation-success record.
 Append `action-failed` under bounded recovery rather than
 persisting `review-requested` or consuming a publication identity. Serialize
 `["maestro-acceptance-evidence-binding-manifest-v1",[<entries sorted by evidence requirement key>]]`
@@ -220,6 +249,12 @@ Resolving the same template to a new issue, PR, base/head, check, comment,
 artifact, manual record, repository file/commit, provider record revision, or
 content digest changes this runtime manifest/review input, never the approved
 contract revision.
+
+A reconciliation-only unresolved requirement never enters and cannot block the
+pre-merge review manifest. After merge, reconciliation resolves
+`reconciliation` and `both` requirements against fresh native state; unresolved
+or ambiguous post-merge bindings block `merge-reconciled`, implementation
+completion, and Symphony closeout until exact required evidence is available.
 
 ### Review evidence and full context identity
 
@@ -236,6 +271,10 @@ Each applicable confirmed decision-resolution contributes
 Only an exact pause/revision match is applicable. Canonicalize all ordered sets,
 then serialize the complete input on one fixed field order:
 
+Before source closure exists, derive the stable review worktree reservation from
+`["maestro-review-worktree-reservation-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub repository native identity>","<PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>"]`
+as `review-worktree-reservation-v1:<lowercase SHA-256 hex>`. The reservation identity uses only pre-closure inputs and authorizes exact-head worktree creation, source-closure derivation, guarded cleanup, and recovery—never review dispatch or publication.
+
 ```text
 ["maestro-review-input-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review source closure revision>","<acceptance evidence binding manifest revision>",[<lens/validator evidence manifest>],[<acceptance-evidence binding manifest>],[<applicable decision-resolution items>]]
 ```
@@ -244,6 +283,10 @@ Digest it as `review-input-v1:<lowercase SHA-256 hex>`. Derive the Review PR
 action identity from
 `["maestro-review-action-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review input revision>"]`
 as `review-action-v1:<lowercase SHA-256 hex>`.
+After deriving the final action, canonicalize
+`["maestro-review-worktree-action-binding-v1","<review worktree reservation identity>","<review action identity>"]`
+as `review-worktree-action-binding-v1:<lowercase SHA-256 hex>`. Append and
+confirm this durable journal binding before changing the local marker.
 Derive GitHub publication identity from
 `["maestro-review-github-publication-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review input revision>","<review action identity>","github-review"]`
 as `review-github-publication-v1:<lowercase SHA-256 hex>`.
@@ -251,18 +294,24 @@ Derive Linear publication identity from
 `["maestro-review-linear-publication-v1","<Symphony UUID>","<implementation issue UUID>","<GitHub PR native ID>","<base SHA>","<head SHA>","<contract revision>","<DAG revision>","<review-policy revision>","<review input revision>","<review action identity>","linear-cursor-follow-up"]`
 as `review-linear-publication-v1:<lowercase SHA-256 hex>`.
 
-Reconciliation creates the owned exact-head worktree before source closure or `review-requested`.
-It then confirms the PR
-native ID, repository identity, base/head SHAs, governance revisions, and review
-candidate; creates or acquires one owned isolated detached worktree at the exact
-head; verifies containment, ownership metadata, repository identity, and
-`git rev-parse HEAD == <expected head SHA>`; and derives all repository
-policy/config sources from that exact root. Only then may it append and confirm
-`review-requested` containing every canonical array/digest and provider record.
-It dispatches review with that same worktree and explicitly transfers cleanup
-ownership after confirmed dispatch. If dispatch does not occur, reconciliation
-retains ownership and cleans the worktree through the guarded attachment-state
-branch.
+Reconciliation first appends/confirms `review-worktree-reserved`, writes only
+the reservation identity to the initial cleanup ledger and marker, then creates
+the owned exact-head worktree before source closure or `review-requested`. It
+verifies containment, ownership, repository/head identity, and derives closure.
+After the full input/action exists, it appends/confirms exactly one
+`review-worktree-action-bound` record, atomically updates the marker to repeat
+the bound action identity, and verifies the journal/marker pair. Only then may
+it append `review-requested` and dispatch. Dispatch absence leaves cleanup
+ownership with reconciliation; confirmed dispatch makes one one-way transfer to
+review.
+
+Crash recovery is finite. A confirmed reservation with no worktree resumes
+creation. An attached worktree with no closure resumes closure derivation. A
+confirmed action binding with an old reservation-only marker updates the marker.
+A marker that claims an action binding absent from the journal fails closed,
+emits cleanup debt, and permits neither dispatch nor deletion. Cleanup before
+final action binding remains possible by exact reservation identity and guarded
+attachment state.
 
 Immediately before any GitHub review/comment publication, freshly re-read the
 complete context, re-resolve every evidence requirement template, rederive the
@@ -275,6 +324,19 @@ event containing old and new revisions plus the changed component, cleans the
 owned worktree, and returns the new eligible input to reconciliation. If a fresh
 input cannot be derived, fail closed with `action-failed` and the old revision;
 no publication identity is consumed.
+
+When the outcome requires a Linear `@Cursor` follow-up, the confirmed canonical
+GitHub record is only the first publication boundary. Immediately before Linear,
+freshly re-read, rebind, and rederive the same complete input again with
+`pre-publication` source closure and require byte equality with the
+reviewed/GitHub-published revision. If it differs or is underivable, publish no
+Linear follow-up and append exactly one `review-input-stale` referencing the
+already-published GitHub record and the old plus new or literal `underivable`
+revision. That GitHub record remains historical but cannot satisfy the current
+Maestro pass/review gate. Clean the owned worktree; a derivable new revision is
+eligible, while an underivable input follows bounded derivation recovery.
+Unchanged input permits publication or identity-based recovery of exactly one
+canonical Linear follow-up.
 
 Changed acceptance evidence, provider revision, source/policy bytes, capability,
 decision resolution, base/head SHA, or any linked native identity creates a new
@@ -410,10 +472,12 @@ without its real instruction is invalid.
 | `dag-materialized` | Materializer after every required node and edge is confirmed | Control enters `maestro:executing`; implementation nodes remain planning until dispatch |
 | `semantic-drift-detected` | Reconciler after a deduplicated contract or edge diff | Locks affected work and enters `maestro:needs-human` or `maestro:scope-change` |
 | `issue-dispatched` | Reconciler after fresh confirmation of Cursor delegation | Reconstructs active managed work; issue enters `maestro:executing` |
+| `review-worktree-reserved` | Reconciler after canonical pre-closure reservation confirmation | Authorizes only exact-head creation, closure derivation, guarded cleanup, and recovery |
+| `review-worktree-action-bound` | Reconciler after final review action derivation | Durably binds reservation to action and authorizes the atomic marker update |
 | `review-requested` | Reconciler after the canonical current review input revision is durably confirmed | Authorizes review and publication for only that exact head and input revision |
 | `review-recorded` | Review skill after its exact-head and exact-input-revision GitHub record is confirmed | Reconciler consumes the current review verdict and next gate |
-| `review-stale-head` | Review skill when the head changes before publication | Discards the result and leaves the new head eligible |
-| `review-input-stale` | Review skill when full pre-publication rederivation differs from the reviewed input | Records old/new revisions, discards the result, and leaves only the new input eligible |
+| `review-stale-head` | Reconciler only when the head changes before `review-requested` or expensive review begins | Leaves the new head eligible without creating a reviewed result |
+| `review-input-stale` | Review skill when any full-input change occurs after `review-requested` or review execution begins | Records old/new or underivable revision, invalidates the stale result for current gates, and leaves only a derivable new input eligible |
 | `merge-observed` | Reconciler for every confirmed GitHub merge not yet reconciled | Preserves merge identity while keeping “merged” distinct from “merge-reconciled” |
 | `merge-reconciled` | Reconciler only after a complete, evidenced reconciler verdict | Completes only that implementation issue and permits downstream readiness recalculation |
 | `human-decision-required` | Start/review/reconcile when human authority is required | Records prior/resume phase and locks only the affected subgraph |
@@ -533,10 +597,12 @@ or choice group.
 | `event` | `dag-materialized` | `both` | `all-native-bindings-and-events-are-confirmed` | `entity-executing` | `none` |
 | `event` | `semantic-drift-detected` | `both` | `normalized-contract-or-edge-drift-is-confirmed` | `affected-subgraph-paused` | `none` |
 | `event` | `issue-dispatched` | `both` | `cursor-delegation-is-freshly-confirmed` | `entity-executing` | `none` |
+| `event` | `review-worktree-reserved` | `both` | `canonical-preclosure-review-reservation-is-confirmed` | `reservation-authorized` | `none` |
+| `event` | `review-worktree-action-bound` | `both` | `reservation-to-final-review-action-binding-is-confirmed` | `action-binding-confirmed` | `none` |
 | `event` | `review-requested` | `both` | `canonical-review-input-revision-is-durably-confirmed` | `review-revision-eligible` | `none` |
 | `event` | `review-recorded` | `both` | `canonical-exact-head-and-input-revision-review-record-is-confirmed` | `review-gate-recorded` | `none` |
-| `event` | `review-stale-head` | `both` | `remote-pr-head-no-longer-matches-reviewed-head` | `review-new-head` | `none` |
-| `event` | `review-input-stale` | `both` | `current-review-input-differs-from-reviewed-input` | `new-review-input-eligible` | `none` |
+| `event` | `review-stale-head` | `both` | `remote-pr-head-changed-and-review-requested-is-absent` | `review-new-head` | `none` |
+| `event` | `review-input-stale` | `both` | `full-input-changed-or-underivable-and-review-requested-is-confirmed` | `new-review-input-eligible` | `none` |
 | `event` | `merge-observed` | `both` | `github-merge-sha-is-freshly-confirmed` | `merge-reconciliation-pending` | `none` |
 | `event` | `merge-reconciled` | `both` | `merge-reconciliation-is-complete-and-evidenced` | `implementation-complete` | `none` |
 | `event` | `human-decision-required` | `both` | `bounded-or-strategic-human-authority-is-required` | `affected-subgraph-paused` | `none` |
@@ -556,8 +622,8 @@ or choice group.
 | `failure-category` | `external-transient` | `both` | `external-transient-category-is-evidenced` | `external-transient-recovery` | `none` |
 | `failure-category` | `mutation-ambiguous` | `both` | `mutation-ambiguous-category-is-evidenced` | `mutation-ambiguous-recovery` | `none` |
 | `failure-category` | `semantic-drift` | `both` | `semantic-drift-category-is-evidenced` | `semantic-drift-recovery` | `none` |
-| `failure-category` | `review-stale-head` | `both` | `review-stale-head-category-is-evidenced` | `review-stale-head-recovery` | `none` |
-| `failure-category` | `review-input-stale` | `both` | `review-input-stale-category-is-evidenced` | `new-review-input-eligible` | `none` |
+| `failure-category` | `review-stale-head` | `both` | `review-stale-head-before-request-category-is-evidenced` | `review-stale-head-recovery` | `none` |
+| `failure-category` | `review-input-stale` | `both` | `review-input-stale-after-request-category-is-evidenced` | `new-review-input-eligible` | `none` |
 | `failure-category` | `validation-timeout` | `both` | `validation-timeout-category-is-evidenced` | `validation-timeout-recovery` | `none` |
 | `failure-category` | `capability-lost` | `both` | `capability-lost-category-is-evidenced` | `capability-lost-recovery` | `none` |
 | `failure-category` | `cleanup-failed` | `both` | `cleanup-failed-category-is-evidenced` | `cleanup-failed-recovery` | `none` |
